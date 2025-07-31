@@ -1,13 +1,13 @@
 # PDK Rogue
 
-A roguelike deckbuilder that combines the strategic depth of Chinese trick-taking games (跑得快/斗地主) with progression systems inspired by Slay the Spire and Balatro.
+A roguelike deckbuilder that combines the strategic depth of 跑得快 with progression systems inspired by Slay the Spire and Balatro.
 
 ## Core Concept
 
-Wild Planes transforms traditional trick-taking card games into a roguelike adventure. Battle through procedurally generated paths using poker cards and skill-based combat, collecting powerful abilities and items to tackle increasingly challenging regions and enemies.
+Battle through procedurally generated paths using poker cards and skill-based combat, collecting powerful abilities and items to tackle increasingly challenging regions and enemies.
 
 ### Key Features
-- **Unique Combat System**: Based on 跑得快 (Run Fast) rules with a twist - passing costs HP
+- **Unique Combat System**: Based on 跑得快 rules with a twist - passing costs HP
 - **Roguelike Progression**: Choose your path, face elite enemies and bosses, unlock new content
 - **Strategic Loadouts**: Collect skill cards and items, but carefully select what to bring on each run
 - **Regional Variety**: Each region has unique rules that change combat dynamics
@@ -16,8 +16,8 @@ Wild Planes transforms traditional trick-taking card games into a roguelike adve
 ## Gameplay Overview
 
 ### Combat Mechanics
-- Players and enemies are dealt cards from a shuffled poker deck (with some cards discarded)
-- Take turns playing card combinations strategically based on the current board state
+- Players and enemies are dealt cards from a shuffled poker deck (with X cards discarded)
+- Take turns playing card combinations strategically
 - **Pass = Take 1 damage** - This creates constant pressure to keep playing
 - Win by either:
   - Reducing opponent's HP to 0
@@ -37,16 +37,19 @@ Wild Planes transforms traditional trick-taking card games into a roguelike adve
 
 ### Progression System
 1. **During Runs**: 
+   - Start a run with X max Life Points
    - Win fights → Earn skill cards
-   - Random encounter rewards → Temporary items (valid only during current run)
-   - Complete regions → Earn equipment for permanent collection
-2. **Between Runs**: 
-   - Build your equipment collection
-   - Unlock additional equipment slots
-3. **Before Each Run**:
+   - Lose fights → Lose 2 life points
+   - Surrender at the beginning of a fight → Lose 1 life points
+   - Win fight without taking damage → Gain 1 life points (cannot exceed your max life points)
+   - Force enemy to pass all hands → Gain 1 life points (cannot exceed your max life points)
+   - Random encounter rewards → Skill cards and/or Temporary items (valid only during current run)
+   - Complete runs → Earn equipment for permanent collection, unlock new skill cards and temporary items that may appear in next run
+   - Complete region → Unlock additional equipment slots or gain 1 max life points permanently
+2. **Before Each Run**:
    - Select equipment to take with you (limited by unlocked slots)
-   - Choose which region to challenge
-4. **Difficulty Scaling**: Higher difficulties = fewer equipment slots, stronger enemies
+   - Choose which region and which path to challenge
+3. **Difficulty Scaling**: Higher difficulties = fewer equipment slots, stronger enemies
 
 ### Skill Cards & Items
 - **Skill Cards**: Active abilities used during combat (e.g., "Double next combo damage", "Peek at enemy's cards")
@@ -58,11 +61,9 @@ Wild Planes transforms traditional trick-taking card games into a roguelike adve
 
 ### Regional Modifiers (Examples)
 - **Amazon River**: Straights deal double damage
-- **Twin Peaks**: Pairs and triples gain bonus effects
-- **Volcano**: Bomb combinations trigger special abilities
 
 ### Enemy Types
-- **Basic Enemies**: Standard AI opponents
+- **Basic Enemies**
 - **Elite Enemies**: Have their own skill cards and enhanced AI
 - **Bosses**: Multi-phase battles with unique mechanics and abilities
 
@@ -70,32 +71,34 @@ Wild Planes transforms traditional trick-taking card games into a roguelike adve
 
 ### Core Game Systems
 - Implement 跑得快 card game rules and combination detection
-- Create AI opponent with multiple difficulty levels and play styles
+- Create Basic AI play logic
 - Build combat system with HP, pass damage, and win conditions
 - Develop skill card system with in-combat activation
 - Design equipment system with pre-run selection interface
+- Map Design (regions and runs in a region)
+- What else?
 
 ### Roguelike Structure
-- Map generation with branching paths and node types (combat, elite, shop, event, boss)
+- Map generation with branching paths and node types for each run (combat, elite, shop, event, boss)
 - Node rewards system (skill cards, temporary items, gold)
-- Shop system for purchasing skill cards and temporary items
+- Shop system for purchasing skill cards, temporary items, and e.g., play cards (buy a 2 so every game in this run you start with an extra 2)
 - Random event encounters with choices and consequences
 - Region completion rewards and progression tracking
 
 ### Content & Progression
-- Design and implement 5+ unique regions with distinct modifiers
-- Create 20+ skill cards with varied effects
-- Design 15+ equipment pieces with passive abilities
-- Implement elite enemies with unique abilities
-- Create multi-phase boss battles for each region
+- Design and implement 5 unique regions with distinct modifiers
+- Create 50 skill cards with varied effects
+- Create 30 items with varied effects
+- Design 15 equipments with passive abilities
+- Design and Create Elite AI skill cards and play logic
+- Design and Create multi-phase Boss AI mechanics, abilities, and play logic
 - Balance card distributions, enemy HP, and damage values
 
 ### Meta-Progression Systems
-- Player profile with collection tracking
+- Player profile with collection tracking, achievement system
 - Equipment unlock system based on achievements/milestones
 - Equipment slot unlocking through gameplay progression
-- Difficulty tier system with appropriate scaling
-- Run statistics and history tracking
+- Run statistics (e.g., how many wins/loses, how often pass, how often beat by emptying hands/eliminating enemy hp, etc)
 
 ### UI/UX Development
 - Main menu and game state management
@@ -131,8 +134,9 @@ GameState
 ├── RunState (current run progress)
 │   ├── CurrentRegion
 │   ├── CurrentNode
-│   ├── PlayerStats (HP, gold, etc.)
+│   ├── PlayerStats (Life Points, gold, etc.)
 │   ├── SkillCardInventory
+│   ├── EquipedEquipment
 │   └── TemporaryItems
 ├── MetaState (persistent progress)
 │   ├── UnlockedEquipment
@@ -142,8 +146,9 @@ GameState
 └── CombatState
     ├── PlayerHand
     ├── EnemyHand
-    ├── LastPlayedCombo
-    ├── TurnState
+    ├── AbandonedHand
+    ├── LastPlayedHand
+    ├── PlayerHP
     └── CombatModifiers
 ```
 
