@@ -3,6 +3,7 @@ from lib.combo import identify_combo, ComboType
 from collections import defaultdict
 import itertools
 
+
 class RoguePlayer:
     def __init__(self, name):
         self.name = name
@@ -10,21 +11,26 @@ class RoguePlayer:
         self.skill_cards = []
         self.items = []
 
+
 class FightPlayer:
     def __init__(self, name, is_ai=False):
         self.name = name
         self.is_ai = is_ai
         self.hand = []
         self.hp = 10
+
     def sort_hand(self):
         self.hand.sort()
+
     def remove_cards(self, cards):
         for card in cards:
             self.hand.remove(card)
 
+
 class AIFightPlayer(FightPlayer):
     def __init__(self, name):
         super().__init__(name, is_ai=True)
+
     def find_valid_plays(self, last_combo):
         # ...existing code...
         valid_combos = []
@@ -83,6 +89,7 @@ class AIFightPlayer(FightPlayer):
                     if bomb and bomb.can_beat(last_combo):
                         valid_combos.append(bomb)
         return valid_combos
+
     def _find_straights(self, target_length=None):
         # ...existing code...
         straights = []
@@ -92,14 +99,14 @@ class AIFightPlayer(FightPlayer):
             for end_idx in range(start_idx + min_length - 1, len(values)):
                 is_consecutive = True
                 for i in range(start_idx + 1, end_idx + 1):
-                    if values[i] != values[i-1] + 1:
+                    if values[i] != values[i - 1] + 1:
                         is_consecutive = False
                         break
                 if is_consecutive:
                     length = end_idx - start_idx + 1
                     if target_length is None or length == target_length:
                         straight_cards = []
-                        for val in values[start_idx:end_idx+1]:
+                        for val in values[start_idx : end_idx + 1]:
                             for card in self.hand:
                                 if card.value == val and card not in straight_cards:
                                     straight_cards.append(card)
@@ -109,6 +116,7 @@ class AIFightPlayer(FightPlayer):
                             if combo:
                                 straights.append(combo)
         return straights
+
     def _find_planes(self):
         # ...existing code...
         planes = []
@@ -165,6 +173,7 @@ class AIFightPlayer(FightPlayer):
                             if combo and combo.type == ComboType.PLANE_WITH_PAIRS:
                                 planes.append(combo)
         return planes
+
     def choose_play(self, last_combo, game_state):
         # ...existing code...
         valid_plays = self.find_valid_plays(last_combo)

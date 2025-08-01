@@ -1,6 +1,7 @@
 from enum import Enum
 from collections import defaultdict
 
+
 class ComboType(Enum):
     SINGLE = 1
     PAIR = 2
@@ -14,12 +15,13 @@ class ComboType(Enum):
     PLANE_WITH_PAIRS = 10
     BOMB = 11
 
+
 class Combo:
     def __init__(self, cards, combo_type):
         self.cards = sorted(cards)
         self.type = combo_type
         self.lead_value = self._get_lead_value()
-    
+
     def _get_lead_value(self):
         # ...existing code...
         if self.type == ComboType.SINGLE:
@@ -51,7 +53,7 @@ class Combo:
         elif self.type == ComboType.BOMB:
             return self.cards[0].value
         return 0
-    
+
     def can_beat(self, other):
         # ...existing code...
         if other is None:
@@ -73,7 +75,7 @@ class Combo:
                     return False
             return self.lead_value > other.lead_value
         return False
-    
+
     def _count_consecutive_triples(self):
         value_counts = defaultdict(int)
         for card in self.cards:
@@ -83,11 +85,12 @@ class Combo:
             return 0
         count = 1
         for i in range(1, len(triple_values)):
-            if triple_values[i] == triple_values[i-1] + 1:
+            if triple_values[i] == triple_values[i - 1] + 1:
                 count += 1
             else:
                 break
         return count
+
 
 def identify_combo(cards):
     # ...existing code...
@@ -121,7 +124,7 @@ def identify_combo(cards):
         triple_values.sort()
         consecutive_count = 1
         for i in range(1, len(triple_values)):
-            if triple_values[i] == triple_values[i-1] + 1 and triple_values[i] <= 14:
+            if triple_values[i] == triple_values[i - 1] + 1 and triple_values[i] <= 14:
                 consecutive_count += 1
             else:
                 break
@@ -147,7 +150,7 @@ def identify_combo(cards):
     if n >= 5:
         is_straight = True
         for i in range(1, n):
-            if cards[i].value != cards[i-1].value + 1:
+            if cards[i].value != cards[i - 1].value + 1:
                 is_straight = False
                 break
             if cards[i].value > 14:

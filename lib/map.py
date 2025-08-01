@@ -1,19 +1,23 @@
 from enum import IntEnum, auto
 from dataclasses import dataclass
 
+
 @dataclass
 class Modifier:
     surrender_life_cost: int = 1
     turn_damage_multiplier: float = 1.0
 
+
 @dataclass
-class NodeModifier(Modifier):    
+class NodeModifier(Modifier):
     visible: bool = False
+
 
 class RogueNodeType(IntEnum):
     Fight = auto()
     Mystery = auto()
     Shop = auto()
+
 
 class RogueNodeReward:
     def __init__(self, reward_type, value):
@@ -26,20 +30,22 @@ class RogueNodeReward:
     def __str__(self):
         return f"{self.reward_type}: {self.value}"
 
+
 class RogueNode:
     def __init__(
-            self, 
-            name: str, 
-            node_type: RogueNodeType, 
-            node_reward: RogueNodeReward,
-            node_modifier: NodeModifier=None,
-            visited: bool = False
-        ):
+        self,
+        name: str,
+        node_type: RogueNodeType,
+        node_reward: RogueNodeReward,
+        node_modifier: NodeModifier = None,
+        visited: bool = False,
+    ):
         self.name = name
         self.node_modifier = node_modifier
         self.node_type = node_type
         self.node_reward = node_reward
         self.visited = visited
+
 
 class RogueMap:
     def __init__(self, map_name: str):
@@ -54,4 +60,3 @@ class RogueMap:
 
     def __repr__(self):
         return f"RogueNode({self.map_name})"
-    
