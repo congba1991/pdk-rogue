@@ -2,7 +2,13 @@ from lib.card import Card
 from lib.combo import identify_combo, ComboType
 from collections import defaultdict
 import itertools
-
+import copy
+import random
+import json
+try:
+    import mcts_rust
+except ImportError:
+    mcts_rust = None
 
 class RoguePlayer:
     def __init__(self, name):
@@ -175,14 +181,6 @@ class AIFightPlayer(FightPlayer):
         return planes
 
     def choose_play(self, last_combo, game_state, num_simulations=10):
-        import copy
-        import random
-        import json
-        try:
-            import mcts_rust
-        except ImportError:
-            mcts_rust = None
-
         def card_to_dict(card):
             return {'rank': card.rank, 'suit': card.suit.value if hasattr(card.suit, 'value') else card.suit}
 
