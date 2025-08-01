@@ -7,13 +7,14 @@ class ComboType(Enum):
     PAIR = 2
     TRIPLE = 3
     STRAIGHT = 4
-    TRIPLE_WITH_SINGLE = 5
-    TRIPLE_WITH_PAIR = 6
-    FOUR_WITH_TWO = 7
-    PLANE = 8
-    PLANE_WITH_SINGLES = 9
-    PLANE_WITH_PAIRS = 10
-    BOMB = 11
+    PAIR_STRAIGHT = 5
+    TRIPLE_WITH_SINGLE = 6
+    TRIPLE_WITH_PAIR = 7
+    FOUR_WITH_TWO = 8
+    PLANE = 9
+    PLANE_WITH_SINGLES = 10
+    PLANE_WITH_PAIRS = 11
+    BOMB = 12
 
 
 class Combo:
@@ -109,6 +110,28 @@ def identify_combo(cards):
         return Combo(cards, ComboType.TRIPLE)
     if n == 4 and len(value_counts) == 1:
         return Combo(cards, ComboType.BOMB)
+
+    # Pair straight (consecutive pairs, at least 3 pairs, no 2s)
+    if n >= 6 and n % 2 == 0:
+        pairs = [value for value, same_cards in value_counts.items() if len(same_cards) >= 2 and value <= 14]
+        if len(pairs) == n // 2:
+            pairs.sort()
+            is_consecutive = True
+            for i in range(1, len(pairs)):
+                if pairs[i] != pairs[i-1] + 1:
+                    is_consecutive = False
+                    break
+            if is_consecutive and len(pairs) >= 3:
+                # Build the pair straight cards in order
+                pair_straight_cards = []
+                for val in pairs:
+                    count = 0
+                    for card in cards:
+                        if card.value == val and count < 2:
+                            pair_straight_cards.append(card)
+                            count += 1
+                if len(pair_straight_cards) == n:
+                    return Combo(pair_straight_cards, ComboType.PAIR_STRAIGHT)
     triple_values = []
     triple_cards = []
     other_cards = []
