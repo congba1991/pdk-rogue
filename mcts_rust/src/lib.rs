@@ -34,6 +34,89 @@ pub fn find_opponent_valid_plays(hand: &[Card], last_combo: Option<&Combo>) -> V
     }
     let mut valid_combos = Vec::new();
 
+    // Helper for straight detection
+    fn find_straights(hand: &[Card], target_length: Option<usize>) -> Vec<Combo> {
+        let mut straights = Vec::new();
+        let mut values: Vec<u8> = hand.iter().map(|c| card_value(&c.rank)).filter(|&v| v <= 14).collect();
+        values.sort_unstable();
+        values.dedup();
+        let min_length = target_length.unwrap_or(5);
+        for start in 0..values.len() {
+            for end in (start + min_length - 1)..values.len() {
+                let mut is_consecutive = true;
+                for i in (start + 1)..=end {
+                    if values[i] != values[i - 1] + 1 {
+                        is_consecutive = false;
+                        break;
+                    }
+                }
+                if is_consecutive {
+                    let length = end - start + 1;
+                    if target_length.is_none() || length == target_length.unwrap() {
+                        let mut straight_cards = Vec::new();
+                        for v in &values[start..=end] {
+                            for c in hand {
+                                if card_value(&c.rank) == *v && !straight_cards.contains(c) {
+                                    straight_cards.push(c.clone());
+                                    break;
+                                }
+                            }
+                        }
+                        if straight_cards.len() == length {
+                            straights.push(Combo {
+                                cards: straight_cards,
+                                combo_type: "STRAIGHT".to_string(),
+                                lead_value: *values[start..=end].iter().max().unwrap(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        straights
+    }
+
+    // Helper for plane detection (no wings)
+    fn find_planes(hand: &[Card]) -> Vec<Combo> {
+        let mut planes = Vec::new();
+        let mut value_groups: HashMap<u8, Vec<Card>> = HashMap::new();
+        for card in hand {
+            value_groups.entry(card_value(&card.rank)).or_default().push(card.clone());
+        }
+        let mut triple_values: Vec<u8> = value_groups.iter().filter(|(_, v)| v.len() >= 3 && v[0].rank != "2").map(|(k, _)| *k).collect();
+        triple_values.sort_unstable();
+        for start in 0..triple_values.len() {
+            let mut consecutive = vec![triple_values[start]];
+            for i in (start + 1)..triple_values.len() {
+                if triple_values[i] == consecutive.last().unwrap() + 1 {
+                    consecutive.push(triple_values[i]);
+                } else {
+                    break;
+                }
+            }
+            if consecutive.len() >= 2 {
+                for length in 2..=consecutive.len() {
+                    let mut plane_base = Vec::new();
+                    for v in &consecutive[..length] {
+                        for c in &value_groups[v] {
+                            if plane_base.len() < length * 3 {
+                                plane_base.push(c.clone());
+                            }
+                        }
+                    }
+                    if plane_base.len() == length * 3 {
+                        planes.push(Combo {
+                            cards: plane_base.clone(),
+                            combo_type: "PLANE".to_string(),
+                            lead_value: *consecutive[..length].iter().max().unwrap(),
+                        });
+                    }
+                }
+            }
+        }
+        planes
+    }
+
     if last_combo.is_none() {
         // Singles
         for card in hand {
@@ -59,6 +142,20 @@ pub fn find_opponent_valid_plays(hand: &[Card], last_combo: Option<&Combo>) -> V
                 valid_combos.push(Combo {
                     cards: cards[0..3].to_vec(),
                     combo_type: "TRIPLE".to_string(),
+                    lead_value: card_value(&cards[0].rank),
+                });
+            }
+        }
+        // Straights
+        valid_combos.extend(find_straights(hand, None));
+        // Planes
+        valid_combos.extend(find_planes(hand));
+        // Bombs (4 of a kind)
+        for cards in value_groups.values() {
+            if cards.len() == 4 {
+                valid_combos.push(Combo {
+                    cards: cards.clone(),
+                    combo_type: "BOMB".to_string(),
                     lead_value: card_value(&cards[0].rank),
                 });
             }
@@ -99,7 +196,35 @@ pub fn find_opponent_valid_plays(hand: &[Card], last_combo: Option<&Combo>) -> V
                     }
                 }
             }
+            "STRAIGHT" => {
+                let straights = find_straights(hand, Some(last.cards.len()));
+                for combo in straights {
+                    if combo.lead_value > last.lead_value {
+                        valid_combos.push(combo);
+                    }
+                }
+            }
+            "PLANE" => {
+                let planes = find_planes(hand);
+                for combo in planes {
+                    if combo.lead_value > last.lead_value {
+                        valid_combos.push(combo);
+                    }
+                }
+            }
             _ => {}
+        }
+        // Bombs always allowed if not already a bomb
+        if last.combo_type.as_str() != "BOMB" {
+            for cards in value_groups.values() {
+                if cards.len() == 4 {
+                    valid_combos.push(Combo {
+                        cards: cards.clone(),
+                        combo_type: "BOMB".to_string(),
+                        lead_value: card_value(&cards[0].rank),
+                    });
+                }
+            }
         }
     }
     valid_combos
@@ -128,17 +253,47 @@ fn simulate_playout_py(
     let mut player_hp = 10;
     let mut ai_turn = !is_ai_turn;
     let mut last_combo = if !play.is_empty() {
+        // Try to detect the combo type based on the cards in play
+        let combo_type = if play.len() == 1 {
+            "SINGLE".to_string()
+        } else if play.len() == 2 && play[0].rank == play[1].rank {
+            "PAIR".to_string()
+        } else if play.len() == 3 && play.iter().all(|c| c.rank == play[0].rank) {
+            "TRIPLE".to_string()
+        } else if play.len() == 4 && play.iter().all(|c| c.rank == play[0].rank) {
+            "BOMB".to_string()
+        } else {
+            // Check for straight
+            let mut values: Vec<u8> = play.iter().map(|c| card_value(&c.rank)).collect();
+            values.sort_unstable();
+            values.dedup();
+            let is_straight = values.len() == play.len()
+                && values.windows(2).all(|w| w[1] == w[0] + 1)
+                && *values.last().unwrap_or(&0) <= 14;
+            if is_straight && play.len() >= 5 {
+                "STRAIGHT".to_string()
+            } else {
+                // Check for plane (multiple consecutive triples)
+                let mut value_counts = std::collections::HashMap::new();
+                for c in &play {
+                    *value_counts.entry(&c.rank).or_insert(0) += 1;
+                }
+                let triple_ranks: Vec<_> = value_counts.iter().filter(|(_, v)| **v == 3).map(|(r, _)| r.as_str()).collect();
+                let mut triple_values: Vec<u8> = triple_ranks.iter().map(|r| card_value(r)).collect();
+                triple_values.sort_unstable();
+                let is_plane = triple_values.len() >= 2
+                    && triple_values.windows(2).all(|w| w[1] == w[0] + 1)
+                    && triple_values.iter().all(|&v| v < 15);
+                if is_plane && play.len() == triple_values.len() * 3 {
+                    "PLANE".to_string()
+                } else {
+                    "SINGLE".to_string() // fallback
+                }
+            }
+        };
         Some(Combo {
             cards: play.clone(),
-            combo_type: if play.len() == 1 {
-                "SINGLE".to_string()
-            } else if play.len() == 2 {
-                "PAIR".to_string()
-            } else if play.len() == 3 {
-                "TRIPLE".to_string()
-            } else {
-                "SINGLE".to_string() // fallback
-            },
+            combo_type,
             lead_value: play.iter().map(|c| card_value(&c.rank)).max().unwrap_or(0),
         })
     } else {
@@ -219,18 +374,48 @@ fn simulate_playouts_parallel_py(
         let mut player_hp = 10;
         let mut ai_turn = !is_ai_turn;
         let mut last_combo = if !play.is_empty() {
-            Some(Combo {
-                cards: play.clone(),
-                combo_type: if play.len() == 1 {
-                    "SINGLE".to_string()
-                } else if play.len() == 2 {
-                    "PAIR".to_string()
-                } else if play.len() == 3 {
-                    "TRIPLE".to_string()
+            // Try to detect the combo type based on the cards in play
+            let combo_type = if play.len() == 1 {
+            "SINGLE".to_string()
+            } else if play.len() == 2 && play[0].rank == play[1].rank {
+            "PAIR".to_string()
+            } else if play.len() == 3 && play.iter().all(|c| c.rank == play[0].rank) {
+            "TRIPLE".to_string()
+            } else if play.len() == 4 && play.iter().all(|c| c.rank == play[0].rank) {
+            "BOMB".to_string()
+            } else {
+            // Check for straight
+            let mut values: Vec<u8> = play.iter().map(|c| card_value(&c.rank)).collect();
+            values.sort_unstable();
+            values.dedup();
+            let is_straight = values.len() == play.len()
+                && values.windows(2).all(|w| w[1] == w[0] + 1)
+                && *values.last().unwrap_or(&0) <= 14;
+            if is_straight && play.len() >= 5 {
+                "STRAIGHT".to_string()
+            } else {
+                // Check for plane (multiple consecutive triples)
+                let mut value_counts = std::collections::HashMap::new();
+                for c in &play {
+                *value_counts.entry(&c.rank).or_insert(0) += 1;
+                }
+                let triple_ranks: Vec<_> = value_counts.iter().filter(|(_, v)| **v == 3).map(|(r, _)| r.as_str()).collect();
+                let mut triple_values: Vec<u8> = triple_ranks.iter().map(|r| card_value(r)).collect();
+                triple_values.sort_unstable();
+                let is_plane = triple_values.len() >= 2
+                && triple_values.windows(2).all(|w| w[1] == w[0] + 1)
+                && triple_values.iter().all(|&v| v < 15);
+                if is_plane && play.len() == triple_values.len() * 3 {
+                "PLANE".to_string()
                 } else {
-                    "SINGLE".to_string() // fallback
-                },
-                lead_value: play.iter().map(|c| card_value(&c.rank)).max().unwrap_or(0),
+                "SINGLE".to_string() // fallback
+                }
+            }
+            };
+            Some(Combo {
+            cards: play.clone(),
+            combo_type,
+            lead_value: play.iter().map(|c| card_value(&c.rank)).max().unwrap_or(0),
             })
         } else {
             None

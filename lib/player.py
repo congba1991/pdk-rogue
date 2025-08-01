@@ -180,7 +180,7 @@ class AIFightPlayer(FightPlayer):
                                 planes.append(combo)
         return planes
 
-    def choose_play(self, last_combo, game_state, num_simulations=10):
+    def choose_play(self, last_combo, game_state, num_simulations=1000):
         def card_to_dict(card):
             return {'rank': card.rank, 'suit': card.suit.value if hasattr(card.suit, 'value') else card.suit}
 
