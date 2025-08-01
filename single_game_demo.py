@@ -520,6 +520,422 @@ class AIPlayer(Player):
         
         return valid_plays[0]
 
+class SmartAIPlayer(AIPlayer):
+    def __init__(self, name):
+        super().__init__(name)
+        self.played_cards = []  # Track all cards played in the game
+        self.cards_per_player = {}  # Track approximate cards remaining per player
+        
+    def choose_play(self, last_combo, game_state):
+        """Enhanced choose_play with heuristic evaluation and lookahead search"""
+        valid_plays = self.find_valid_plays(last_combo)
+        
+        if not valid_plays:
+            return None  # Pass
+        
+        # Add passing as an option if we're not starting
+        if last_combo is not None:
+            valid_plays.append(None)  # None represents passing
+        
+        # Special case: if we can win immediately, do it
+        for play in valid_plays:
+            if play and len(play.cards) == len(self.hand):
+                return play
+        
+        # Use minimax search with heuristic evaluation
+        best_play, best_score = self._minimax_search(
+            valid_plays, 
+            last_combo, 
+            game_state, 
+            depth=3,
+            is_maximizing=True
+        )
+        
+        return best_play
+    
+    def _minimax_search(self, valid_plays, last_combo, game_state, depth, is_maximizing, alpha=-float('inf'), beta=float('inf'), simulated_hand=None):
+        """Minimax search with alpha-beta pruning"""
+        # Use simulated hand if provided, otherwise use actual hand
+        current_hand = simulated_hand if simulated_hand is not None else self.hand
+        
+        # Base case: depth 0 or game over
+        if depth == 0 or len(current_hand) == 0:
+            return None, self._evaluate_position_with_hand(game_state, current_hand)
+        
+        best_play = None
+        
+        if is_maximizing:
+            max_eval = -float('inf')
+            
+            for play in valid_plays:
+                # Skip if this is a pass
+                if play is None:
+                    # For passing, hand remains the same
+                    new_hand = current_hand
+                else:
+                    # Check if we can actually make this play with simulated hand
+                    can_play = all(
+                        sum(1 for c in current_hand if c.value == card.value and c.suit == card.suit) >= 
+                        sum(1 for pc in play.cards if pc.value == card.value and pc.suit == card.suit)
+                        for card in play.cards
+                    )
+                    if not can_play:
+                        continue
+                    
+                    # Simulate making this play
+                    new_hand = [c for c in current_hand if c not in play.cards]
+                    
+                    if len(new_hand) == 0:
+                        # Winning move
+                        return play, 10000
+                
+                # Generate opponent's possible responses
+                opponent_plays = self._estimate_opponent_responses(
+                    play if play else last_combo, 
+                    game_state
+                )
+                
+                # Recursively evaluate with the new hand state
+                _, eval_score = self._minimax_search(
+                    opponent_plays,
+                    play if play else last_combo,
+                    game_state,
+                    depth - 1,
+                    False,
+                    alpha,
+                    beta,
+                    new_hand  # Pass the simulated hand
+                )
+                
+                # Add immediate move evaluation
+                if play:
+                    eval_score += self._evaluate_move_with_hand(play, last_combo, game_state, current_hand) * 0.3
+                
+                if eval_score > max_eval:
+                    max_eval = eval_score
+                    best_play = play
+                
+                alpha = max(alpha, eval_score)
+                if beta <= alpha:
+                    break  # Beta cutoff
+            
+            return best_play, max_eval
+        
+        else:
+            min_eval = float('inf')
+            
+            for play in valid_plays:
+                # Simulate opponent's play (doesn't affect our hand)
+                new_hand = current_hand
+                
+                # Our possible responses based on simulated hand
+                our_responses = self._find_valid_plays_for_hand(
+                    play if play else last_combo,
+                    new_hand
+                )
+                if play is None or not our_responses:
+                    our_responses = [None]
+                
+                # Recursively evaluate
+                _, eval_score = self._minimax_search(
+                    our_responses,
+                    play if play else last_combo,
+                    game_state,
+                    depth - 1,
+                    True,
+                    alpha,
+                    beta,
+                    new_hand  # Pass the simulated hand
+                )
+                
+                if eval_score < min_eval:
+                    min_eval = eval_score
+                    best_play = play
+                
+                beta = min(beta, eval_score)
+                if beta <= alpha:
+                    break  # Alpha cutoff
+            
+            return best_play, min_eval
+    
+    def _evaluate_position_with_hand(self, game_state, hand):
+        """Evaluate the current game position with a specific hand"""
+        score = 0
+        
+        # Hand strength evaluation
+        hand_strength = self._evaluate_hand_strength(hand)
+        score += hand_strength * 10
+        
+        # Cards remaining penalty (fewer cards is better)
+        score -= len(hand) * 50
+        
+        # Control evaluation
+        controls = self._count_controls(hand)
+        score += controls * 100
+        
+        # Hand shape quality
+        shape_score = self._analyze_hand_shape(hand)
+        score += shape_score * 20
+        
+        # Estimate turns to win
+        turns = self._estimate_turns_to_win(hand)
+        score -= turns * 200
+        
+        return score
+    
+    def _evaluate_move_with_hand(self, combo, last_combo, game_state, hand):
+        """Evaluate a specific move with a specific hand"""
+        if combo is None:
+            return -50  # Passing has a small penalty
+        
+        score = 0
+        
+        # Prefer to get rid of low singles early
+        if combo.type == ComboType.SINGLE and combo.lead_value < 10:
+            score += 30
+        
+        # Prefer to keep high cards and bombs
+        avg_value = sum(card.value for card in combo.cards) / len(combo.cards)
+        score -= avg_value * 2
+        
+        # Bonus for using many cards at once
+        score += len(combo.cards) * 10
+        
+        # Penalty for breaking up potential combinations
+        remaining_hand = [c for c in hand if c not in combo.cards]
+        shape_before = self._analyze_hand_shape(hand)
+        shape_after = self._analyze_hand_shape(remaining_hand)
+        score -= (shape_before - shape_after) * 15
+        
+        # Penalty for using bombs too early
+        if combo.type == ComboType.BOMB and len(hand) > 10:
+            score -= 200
+        
+        return score
+    
+    def _find_valid_plays_for_hand(self, last_combo, hand):
+        """Find valid plays for a specific hand (used in simulation)"""
+        # Temporarily swap hands
+        original_hand = self.hand
+        self.hand = hand
+        
+        # Find valid plays
+        valid_plays = self.find_valid_plays(last_combo)
+        
+        # Restore original hand
+        self.hand = original_hand
+        
+        return valid_plays
+    
+    def _evaluate_hand_strength(self, hand=None):
+        """Evaluate overall hand strength"""
+        if hand is None:
+            hand = self.hand
+        
+        if not hand:
+            return 0
+        
+        strength = 0
+        
+        # High cards value
+        for card in hand:
+            if card.value >= 13:  # K, A, 2
+                strength += (card.value - 10) * 3
+        
+        # Bombs are very valuable
+        value_counts = defaultdict(int)
+        for card in hand:
+            value_counts[card.value] += 1
+        
+        for value, count in value_counts.items():
+            if count == 4:
+                strength += 50
+        
+        return strength
+    
+    def _count_controls(self, hand=None):
+        """Count control cards (high cards and bombs)"""
+        if hand is None:
+            hand = self.hand
+        
+        controls = 0
+        value_counts = defaultdict(int)
+        
+        for card in hand:
+            value_counts[card.value] += 1
+        
+        # Count 2s (highest cards)
+        controls += value_counts.get(15, 0)
+        
+        # Count Aces
+        controls += value_counts.get(14, 0) * 0.7
+        
+        # Count bombs
+        for value, count in value_counts.items():
+            if count == 4:
+                controls += 2
+        
+        return controls
+    
+    def _analyze_hand_shape(self, hand=None):
+        """Analyze hand shape quality"""
+        if hand is None:
+            hand = self.hand
+        
+        if not hand:
+            return 0
+        
+        shape_score = 0
+        value_counts = defaultdict(int)
+        
+        for card in hand:
+            value_counts[card.value] += 1
+        
+        # Penalty for isolated cards
+        singles = sum(1 for count in value_counts.values() if count == 1)
+        shape_score -= singles * 5
+        
+        # Bonus for pairs and triples
+        pairs = sum(1 for count in value_counts.values() if count == 2)
+        triples = sum(1 for count in value_counts.values() if count == 3)
+        shape_score += pairs * 3 + triples * 5
+        
+        # Check for potential straights
+        values = sorted(value_counts.keys())
+        consecutive = 0
+        for i in range(1, len(values)):
+            if values[i] == values[i-1] + 1 and values[i] <= 14:
+                consecutive += 1
+            else:
+                if consecutive >= 4:
+                    shape_score += consecutive * 2
+                consecutive = 0
+        
+        return shape_score
+    
+    def _estimate_turns_to_win(self, hand=None):
+        """Estimate minimum turns needed to empty hand"""
+        if hand is None:
+            hand = list(self.hand)
+        
+        if not hand:
+            return 0
+        
+        # Group by value
+        value_groups = defaultdict(list)
+        for card in hand:
+            value_groups[card.value].append(card)
+        
+        turns = 0
+        remaining_cards = list(hand)
+        
+        # First, count bombs (they can be played anytime)
+        for value, cards in value_groups.items():
+            if len(cards) == 4:
+                turns += 1
+                remaining_cards = [c for c in remaining_cards if c.value != value]
+        
+        # Then count triples
+        value_groups = defaultdict(list)
+        for card in remaining_cards:
+            value_groups[card.value].append(card)
+        
+        for value, cards in list(value_groups.items()):
+            if len(cards) >= 3:
+                turns += 1
+                for _ in range(3):
+                    remaining_cards.remove(cards[0])
+                    cards.pop(0)
+        
+        # Count pairs
+        value_groups = defaultdict(list)
+        for card in remaining_cards:
+            value_groups[card.value].append(card)
+        
+        for value, cards in list(value_groups.items()):
+            if len(cards) >= 2:
+                turns += 1
+                remaining_cards = [c for c in remaining_cards if c != cards[0] and c != cards[1]]
+        
+        # Remaining singles
+        turns += len(remaining_cards)
+        
+        # This is optimistic; real turns might be more
+        return max(turns, len(hand) // 5)
+    
+    def _simulate_play(self, play, game_state, is_own_play):
+        """Simulate making a play and return new game state"""
+        new_state = game_state.copy() if hasattr(game_state, 'copy') else game_state
+        
+        # Don't actually modify self.hand during simulation
+        # Just track what would be removed
+        if is_own_play and play:
+            # Store the original hand and create a simulated version
+            # This is handled in the search by tracking remaining cards
+            pass
+        
+        return new_state
+    
+    def _estimate_opponent_responses(self, last_combo, game_state):
+        """Estimate possible opponent responses"""
+        # For simplicity, generate a few likely responses
+        # In a real implementation, this would use card counting
+        
+        responses = []
+        
+        if last_combo is None:
+            # Opponent can play anything; assume they play conservatively
+            responses.extend([
+                self._create_mock_combo(ComboType.SINGLE, 8),
+                self._create_mock_combo(ComboType.SINGLE, 10),
+                self._create_mock_combo(ComboType.PAIR, 9),
+                None  # Pass
+            ])
+        else:
+            # Opponent needs to beat our combo
+            if last_combo.type == ComboType.SINGLE:
+                for value in range(last_combo.lead_value + 1, 16):
+                    responses.append(self._create_mock_combo(ComboType.SINGLE, value))
+            elif last_combo.type == ComboType.PAIR:
+                for value in range(last_combo.lead_value + 1, 16):
+                    responses.append(self._create_mock_combo(ComboType.PAIR, value))
+            
+            responses.append(None)  # Can always pass
+            
+            # Consider bombs
+            if last_combo.type != ComboType.BOMB:
+                responses.append(self._create_mock_combo(ComboType.BOMB, 10))
+        
+        return responses[:5]  # Limit responses for performance
+    
+    def _create_mock_combo(self, combo_type, lead_value):
+        """Create a mock combo for simulation"""
+        # This is a simplified version; real implementation would be more sophisticated
+        mock_cards = []
+        
+        if combo_type == ComboType.SINGLE:
+            mock_cards = [type('Card', (), {'value': lead_value, 'suit': 0})]
+        elif combo_type == ComboType.PAIR:
+            mock_cards = [
+                type('Card', (), {'value': lead_value, 'suit': 0}),
+                type('Card', (), {'value': lead_value, 'suit': 1})
+            ]
+        elif combo_type == ComboType.BOMB:
+            mock_cards = [
+                type('Card', (), {'value': lead_value, 'suit': i}) 
+                for i in range(4)
+            ]
+        
+        # Create a mock combo object
+        combo = type('Combo', (), {
+            'type': combo_type,
+            'cards': mock_cards,
+            'lead_value': lead_value,
+            'can_beat': lambda other: other is None or combo_type == ComboType.BOMB or lead_value > other.lead_value
+        })()
+        
+        return combo
+
 class Game:
     def __init__(self, screen):
         self.screen = screen
@@ -528,7 +944,7 @@ class Game:
         self.big_font = pygame.font.Font(None, 36)
         
         self.player = Player("Player")
-        self.ai = AIPlayer("AI")
+        self.ai = SmartAIPlayer("AI")
         self.current_player = None
         self.last_combo = None
         self.last_player = None
