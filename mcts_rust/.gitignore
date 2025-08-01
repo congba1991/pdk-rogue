@@ -1,0 +1,19 @@
+# Rust build and cache files
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# VSCode and editor files
+/.vscode/
+*.swp
+*.swo
+
+# Python cache (if any)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Misc
+.DS_Store
+*.log

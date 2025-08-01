@@ -177,111 +177,45 @@ class AIFightPlayer(FightPlayer):
     def choose_play(self, last_combo, game_state, num_simulations=10):
         import copy
         import random
+        import json
+        try:
+            import mcts_rust
+        except ImportError:
+            mcts_rust = None
+
+        def card_to_dict(card):
+            return {'rank': card.rank, 'suit': card.suit.value if hasattr(card.suit, 'value') else card.suit}
 
         valid_plays = self.find_valid_plays(last_combo)
         if not valid_plays:
             return None
-
-        # If only one valid play, return it
         if len(valid_plays) == 1:
             return valid_plays[0]
-
-        # Monte Carlo Tree Search (MCTS) for move selection
-        # For each valid play, simulate random playouts and pick the move with the highest win rate
-        def simulate_playout(start_hand, opp_hand, play, last_combo, is_ai_turn):
-            # Simulate a random game from this state
-            ai_hand = copy.deepcopy(start_hand)
-            player_hand = copy.deepcopy(opp_hand)
-            ai_hand = [c for c in ai_hand if c not in play.cards]
-            last = play
-            ai_turn = not is_ai_turn
-            ai_hp = 10
-            player_hp = 10
-            while ai_hand and player_hand and ai_hp > 0 and player_hp > 0:
-                if ai_turn:
-                    # AI's turn: play random valid move or pass
-                    possible = self.find_valid_plays(last)
-                    if possible:
-                        move = random.choice(possible)
-                        ai_hand = [c for c in ai_hand if c not in move.cards]
-                        last = move
-                    else:
-                        last = None
-                        ai_hp -= 1  # AI passes, loses 1 hp
-                else:
-                    # Opponent's turn: play random valid move or pass
-                    possible = self._find_opponent_valid_plays(player_hand, last)
-                    if possible:
-                        move = random.choice(possible)
-                        player_hand = [c for c in player_hand if c not in move.cards]
-                        last = move
-                    else:
-                        last = None
-                        player_hp -= 1  # Opponent passes, loses 1 hp
-                ai_turn = not ai_turn
-            # AI wins if its hand is empty or opponent's hp is 0
-            return len(ai_hand) == 0 or player_hp <= 0
-
-        # Helper to find valid plays for the simulated opponent
-        def _find_opponent_valid_plays(hand, last_combo):
-            # Use same logic as AI but with a hand passed in
-            value_groups = defaultdict(list)
-            for card in hand:
-                value_groups[card.value].append(card)
-            valid_combos = []
-            if last_combo is None:
-                for card in hand:
-                    combo = identify_combo([card])
-                    if combo:
-                        valid_combos.append(combo)
-                for cards in value_groups.values():
-                    if len(cards) >= 2:
-                        combo = identify_combo(cards[:2])
-                        if combo:
-                            valid_combos.append(combo)
-                for cards in value_groups.values():
-                    if len(cards) >= 3:
-                        combo = identify_combo(cards[:3])
-                        if combo:
-                            valid_combos.append(combo)
-            else:
-                if last_combo.type == ComboType.SINGLE:
-                    for card in hand:
-                        if card.value > last_combo.lead_value:
-                            combo = identify_combo([card])
-                            if combo:
-                                valid_combos.append(combo)
-                elif last_combo.type == ComboType.PAIR:
-                    for cards in value_groups.values():
-                        if len(cards) >= 2 and cards[0].value > last_combo.lead_value:
-                            combo = identify_combo(cards[:2])
-                            if combo:
-                                valid_combos.append(combo)
-                elif last_combo.type == ComboType.TRIPLE:
-                    for cards in value_groups.values():
-                        if len(cards) >= 3 and cards[0].value > last_combo.lead_value:
-                            combo = identify_combo(cards[:3])
-                            if combo:
-                                valid_combos.append(combo)
-            return valid_combos
-
-        self._find_opponent_valid_plays = _find_opponent_valid_plays
 
         best_play = None
         best_score = -1
         for play in valid_plays:
             wins = 0
             for _ in range(num_simulations):
-                # Simulate with deep copies of hands
                 ai_hand = copy.deepcopy(self.hand)
-                opp_hand = [Card(c.rank, c.suit) for c in game_state.get('opponent_hand', [])] if 'opponent_hand' in game_state else [Card('3', '♦')]*len(self.hand)  # fallback: dummy hand
+                opp_hand = [Card(c.rank, c.suit) for c in game_state.get('opponent_hand', [])] if 'opponent_hand' in game_state else [Card('3', '♦')]*len(self.hand)
                 if not opp_hand:
-                    # If no info, simulate with random hand of same size
                     all_ranks = list(Card.VALUE_MAP.keys())
                     all_suits = list(set(c.suit for c in ai_hand))
                     opp_hand = [Card(random.choice(all_ranks), random.choice(all_suits)) for _ in range(len(self.hand))]
-                if simulate_playout(ai_hand, opp_hand, play, last_combo, True):
-                    wins += 1
+                if mcts_rust:
+                    result = mcts_rust.simulate_playout_py(
+                        json.dumps([card_to_dict(c) for c in ai_hand]),
+                        json.dumps([card_to_dict(c) for c in opp_hand]),
+                        json.dumps([card_to_dict(c) for c in play.cards]),
+                        json.dumps([]),  # last_combo, can be improved
+                        True
+                    )
+                    if result:
+                        wins += 1
+                else:
+                    # fallback: always lose
+                    pass
             if wins > best_score:
                 best_score = wins
                 best_play = play
