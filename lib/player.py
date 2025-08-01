@@ -3,7 +3,14 @@ from lib.combo import identify_combo, ComboType
 from collections import defaultdict
 import itertools
 
-class Player:
+class RoguePlayer:
+    def __init__(self, name):
+        self.name = name
+        self.life = 10
+        self.skill_cards = []
+        self.items = []
+
+class FightPlayer:
     def __init__(self, name, is_ai=False):
         self.name = name
         self.is_ai = is_ai
@@ -15,7 +22,7 @@ class Player:
         for card in cards:
             self.hand.remove(card)
 
-class AIPlayer(Player):
+class AIFightPlayer(FightPlayer):
     def __init__(self, name):
         super().__init__(name, is_ai=True)
     def find_valid_plays(self, last_combo):

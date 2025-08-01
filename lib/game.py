@@ -1,18 +1,35 @@
 import pygame
 import random
+from lib.map import RogueMap
 from lib.card import Card, Suit
 from lib.combo import identify_combo
-from lib.player import Player, AIPlayer
+from lib.player import RoguePlayer, FightPlayer, AIFightPlayer
 from lib.constants import *
-class Game:
+
+class RogueGame:
+    def __init__(self, screen, map: RogueMap):
+        self.game_over = False
+        self.game_player = RoguePlayer("Player")
+        self.map = map
+        self.screen = screen
+    
+    def init_game(self):
+        # Initialize game state here
+        pass
+    
+    def run(self):
+        # Main game loop
+        pass
+
+class FightGame:
     def __init__(self, screen):
         self.screen = screen
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, 24)
         self.big_font = pygame.font.Font(None, 36)
         
-        self.player = Player("Player")
-        self.ai = AIPlayer("AI")
+        self.player = FightPlayer("Player")
+        self.ai = AIFightPlayer("AI")
         self.current_player = None
         self.last_combo = None
         self.last_player = None
