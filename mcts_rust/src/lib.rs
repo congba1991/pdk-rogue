@@ -2,12 +2,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyString;
 use serde::Deserialize;
 use rand::seq::SliceRandom;
-
-#[derive(Deserialize, Clone)]
-pub struct Card {
-    pub rank: String,
-    pub suit: String,
-}
+use rayon::prelude::*;
 
 use std::collections::HashMap;
 
@@ -17,7 +12,7 @@ pub struct Card {
     pub suit: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Deserialize)]
 pub struct Combo {
     pub cards: Vec<Card>,
     pub combo_type: String, // "SINGLE", "PAIR", "TRIPLE"
@@ -193,5 +188,87 @@ fn simulate_playout_py(
 #[pymodule]
 fn mcts_rust(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(simulate_playout_py, m)?)?;
+    m.add_function(wrap_pyfunction!(simulate_playouts_parallel_py, m)?)?;
     Ok(())
+}
+
+#[pyfunction]
+fn simulate_playouts_parallel_py(
+    ai_hand_json: &PyString,
+    player_hand_json: &PyString,
+    play_json: &PyString,
+    last_combo_json: &PyString,
+    is_ai_turn: bool,
+    num_simulations: usize
+) -> PyResult<usize> {
+    let ai_hand_str = ai_hand_json.to_str()?;
+    let player_hand_str = player_hand_json.to_str()?;
+    let play_str = play_json.to_str()?;
+    let last_combo_str = last_combo_json.to_str()?;
+    let wins = (0..num_simulations).into_par_iter().map(|_| {
+        let mut ai_hand: Vec<Card> = serde_json::from_str(ai_hand_str).unwrap();
+        let mut player_hand: Vec<Card> = serde_json::from_str(player_hand_str).unwrap();
+        let play: Vec<Card> = serde_json::from_str(play_str).unwrap();
+        let last_combo: Option<Combo> = match serde_json::from_str::<Combo>(last_combo_str) {
+            Ok(combo) => Some(combo),
+            Err(_) => None,
+        };
+        // Remove played cards from AI hand
+        ai_hand.retain(|c| !play.iter().any(|p| p.rank == c.rank && p.suit == c.suit));
+        let mut ai_hp = 10;
+        let mut player_hp = 10;
+        let mut ai_turn = !is_ai_turn;
+        let mut last_combo = if !play.is_empty() {
+            Some(Combo {
+                cards: play.clone(),
+                combo_type: if play.len() == 1 {
+                    "SINGLE".to_string()
+                } else if play.len() == 2 {
+                    "PAIR".to_string()
+                } else if play.len() == 3 {
+                    "TRIPLE".to_string()
+                } else {
+                    "SINGLE".to_string() // fallback
+                },
+                lead_value: play.iter().map(|c| card_value(&c.rank)).max().unwrap_or(0),
+            })
+        } else {
+            None
+        };
+        let mut rng = rand::thread_rng();
+        while !ai_hand.is_empty() && !player_hand.is_empty() && ai_hp > 0 && player_hp > 0 {
+            if ai_turn {
+                let valid = find_opponent_valid_plays(&ai_hand, last_combo.as_ref());
+                if !valid.is_empty() {
+                    let mv = valid.choose(&mut rng).unwrap();
+                    for c in &mv.cards {
+                        if let Some(pos) = ai_hand.iter().position(|x| x.rank == c.rank && x.suit == c.suit) {
+                            ai_hand.remove(pos);
+                        }
+                    }
+                    last_combo = Some(mv.clone());
+                } else {
+                    last_combo = None;
+                    ai_hp -= 1;
+                }
+            } else {
+                let valid = find_opponent_valid_plays(&player_hand, last_combo.as_ref());
+                if !valid.is_empty() {
+                    let mv = valid.choose(&mut rng).unwrap();
+                    for c in &mv.cards {
+                        if let Some(pos) = player_hand.iter().position(|x| x.rank == c.rank && x.suit == c.suit) {
+                            player_hand.remove(pos);
+                        }
+                    }
+                    last_combo = Some(mv.clone());
+                } else {
+                    last_combo = None;
+                    player_hp -= 1;
+                }
+            }
+            ai_turn = !ai_turn;
+        }
+        ai_hand.is_empty() || player_hp <= 0
+    }).filter(|&win| win).count();
+    Ok(wins)
 }

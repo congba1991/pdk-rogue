@@ -192,29 +192,58 @@ class AIFightPlayer(FightPlayer):
 
         best_play = None
         best_score = -1
-        for play in valid_plays:
-            wins = 0
-            for _ in range(num_simulations):
-                ai_hand = copy.deepcopy(self.hand)
-                opp_hand = [Card(c.rank, c.suit) for c in game_state.get('opponent_hand', [])] if 'opponent_hand' in game_state else [Card('3', '♦')]*len(self.hand)
-                if not opp_hand:
-                    all_ranks = list(Card.VALUE_MAP.keys())
-                    all_suits = list(set(c.suit for c in ai_hand))
-                    opp_hand = [Card(random.choice(all_ranks), random.choice(all_suits)) for _ in range(len(self.hand))]
-                if mcts_rust:
-                    result = mcts_rust.simulate_playout_py(
-                        json.dumps([card_to_dict(c) for c in ai_hand]),
-                        json.dumps([card_to_dict(c) for c in opp_hand]),
-                        json.dumps([card_to_dict(c) for c in play.cards]),
-                        json.dumps([]),  # last_combo, can be improved
-                        True
+        if mcts_rust and hasattr(mcts_rust, 'simulate_playouts_parallel_py'):
+            # Use parallelized Rust MCTS
+            ai_hand_json = json.dumps([card_to_dict(c) for c in self.hand])
+            opp_hand = [Card(c.rank, c.suit) for c in game_state.get('opponent_hand', [])] if 'opponent_hand' in game_state else [Card('3', '♦')]*len(self.hand)
+            if not opp_hand:
+                all_ranks = list(Card.VALUE_MAP.keys())
+                all_suits = list(set(c.suit for c in self.hand))
+                opp_hand = [Card(random.choice(all_ranks), random.choice(all_suits)) for _ in range(len(self.hand))]
+            opp_hand_json = json.dumps([card_to_dict(c) for c in opp_hand])
+            last_combo_json = json.dumps([])  # can be improved
+            for play in valid_plays:
+                play_json = json.dumps([card_to_dict(c) for c in play.cards])
+                try:
+                    wins = mcts_rust.simulate_playouts_parallel_py(
+                        ai_hand_json,
+                        opp_hand_json,
+                        play_json,
+                        last_combo_json,
+                        True,
+                        num_simulations
                     )
-                    if result:
-                        wins += 1
-                else:
-                    # fallback: always lose
-                    pass
-            if wins > best_score:
-                best_score = wins
-                best_play = play
-        return best_play if best_play else random.choice(valid_plays)
+                except Exception:
+                    wins = 0
+                if wins > best_score:
+                    best_score = wins
+                    best_play = play
+            return best_play if best_play else random.choice(valid_plays)
+        else:
+            # Fallback: original (slow) method
+            for play in valid_plays:
+                wins = 0
+                for _ in range(num_simulations):
+                    ai_hand = copy.deepcopy(self.hand)
+                    opp_hand = [Card(c.rank, c.suit) for c in game_state.get('opponent_hand', [])] if 'opponent_hand' in game_state else [Card('3', '♦')]*len(self.hand)
+                    if not opp_hand:
+                        all_ranks = list(Card.VALUE_MAP.keys())
+                        all_suits = list(set(c.suit for c in ai_hand))
+                        opp_hand = [Card(random.choice(all_ranks), random.choice(all_suits)) for _ in range(len(self.hand))]
+                    if mcts_rust:
+                        result = mcts_rust.simulate_playout_py(
+                            json.dumps([card_to_dict(c) for c in ai_hand]),
+                            json.dumps([card_to_dict(c) for c in opp_hand]),
+                            json.dumps([card_to_dict(c) for c in play.cards]),
+                            json.dumps([]),  # last_combo, can be improved
+                            True
+                        )
+                        if result:
+                            wins += 1
+                    else:
+                        # fallback: always lose
+                        pass
+                if wins > best_score:
+                    best_score = wins
+                    best_play = play
+            return best_play if best_play else random.choice(valid_plays)
