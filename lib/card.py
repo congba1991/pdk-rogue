@@ -32,7 +32,7 @@ class Card:
         self.selected = False
 
     def __repr__(self):
-        return f"{self.rank}{self.suit.value}"
+        return f"{self.rank}{self.suit}"
 
     def __lt__(self, other):
         return self.value < other.value

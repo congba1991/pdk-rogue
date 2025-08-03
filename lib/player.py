@@ -2,7 +2,6 @@
 __all__ = [
     'RoguePlayer',
     'FightPlayer',
-    'AIFightPlayer',
     'SmartAIPlayer',
 ]
 
@@ -10,7 +9,6 @@ from lib.card import Card
 from lib.combo import identify_combo, ComboType
 from collections import defaultdict
 import itertools
-import copy
 import random
 import json
 try:
@@ -194,8 +192,8 @@ class SmartAIPlayer(FightPlayer):
         if len(valid_plays) == 1:
             return valid_plays[0]
 
-        # Always use Rust alpha-beta if available
-        if mcts_rust and hasattr(mcts_rust, 'alpha_beta_py'):
+        # Always use Rust minimax if available
+        if mcts_rust and hasattr(mcts_rust, 'minimax_search_py'):
             ai_hand_json = json.dumps([card_to_dict(c) for c in self.hand])
             # Estimate opponent hand (fallback: same size, random cards)
             opp_hand = [Card(c.rank, c.suit) for c in game_state.get('opponent_hand', [])] if 'opponent_hand' in game_state else [Card('3', '♦')]*len(self.hand)
@@ -204,105 +202,41 @@ class SmartAIPlayer(FightPlayer):
                 all_suits = list(set(c.suit for c in self.hand))
                 opp_hand = [Card(random.choice(all_ranks), random.choice(all_suits)) for _ in range(len(self.hand))]
             opp_hand_json = json.dumps([card_to_dict(c) for c in opp_hand])
-            last_combo_json = json.dumps([card_to_dict(c) for c in last_combo.cards]) if last_combo else json.dumps([])
-            best_play = None
-            best_score = -float('inf')
-            for play in valid_plays:
-                play_json = json.dumps([card_to_dict(c) for c in play.cards])
-                try:
-                    score = mcts_rust.alpha_beta_py(
-                        ai_hand_json,
-                        opp_hand_json,
-                        play_json,
-                        last_combo_json,
-                        True,
-                        depth
-                    )
-                    if hasattr(score, 'unwrap'):  # PyO3 may return a Result
-                        score = score.unwrap()
-                except Exception:
-                    score = 0
-                if score > best_score:
-                    best_score = score
-                    best_play = play
-            return best_play if best_play else random.choice(valid_plays)
-        else:
-            # Fallback: random play
-            return random.choice(valid_plays)
-
-class AIFightPlayer(FightPlayer):
-    def __init__(self, name):
-        super().__init__(name, is_ai=True)
-
-
-    def choose_play(self, last_combo, game_state, num_simulations=100, use_alpha_beta=True, depth=4):
-        def card_to_dict(card):
-            return {'rank': card.rank, 'suit': card.suit.value if hasattr(card.suit, 'value') else card.suit}
-
-        valid_plays = self.find_valid_plays(last_combo)
-        if not valid_plays:
-            return None
-        if len(valid_plays) == 1:
-            return valid_plays[0]
-
-        best_play = None
-        best_score = -1
-        if mcts_rust and hasattr(mcts_rust, 'simulate_playouts_parallel_py'):
-            # Use parallelized Rust MCTS or alpha-beta
-            ai_hand_json = json.dumps([card_to_dict(c) for c in self.hand])
-            opp_hand = [Card(c.rank, c.suit) for c in game_state.get('opponent_hand', [])] if 'opponent_hand' in game_state else [Card('3', '♦')]*len(self.hand)
-            if not opp_hand:
-                all_ranks = list(Card.VALUE_MAP.keys())
-                all_suits = list(set(c.suit for c in self.hand))
-                opp_hand = [Card(random.choice(all_ranks), random.choice(all_suits)) for _ in range(len(self.hand))]
-            opp_hand_json = json.dumps([card_to_dict(c) for c in opp_hand])
-            last_combo_json = json.dumps([])  # can be improved
-            for play in valid_plays:
-                play_json = json.dumps([card_to_dict(c) for c in play.cards])
-                try:
-                    wins = mcts_rust.simulate_playouts_parallel_py(
-                        ai_hand_json,
-                        opp_hand_json,
-                        play_json,
-                        last_combo_json,
-                        True,
-                        num_simulations,
-                        use_alpha_beta,
-                        depth
-                    )
-                except Exception:
-                    wins = 0
-                if wins > best_score:
-                    best_score = wins
-                    best_play = play
-            return best_play if best_play else random.choice(valid_plays)
-        else:
-            # Fallback: original (slow) method
-            for play in valid_plays:
-                wins = 0
-                for _ in range(num_simulations):
-                    ai_hand = copy.deepcopy(self.hand)
-                    opp_hand = [Card(c.rank, c.suit) for c in game_state.get('opponent_hand', [])] if 'opponent_hand' in game_state else [Card('3', '♦')]*len(self.hand)
-                    if not opp_hand:
-                        all_ranks = list(Card.VALUE_MAP.keys())
-                        all_suits = list(set(c.suit for c in ai_hand))
-                        opp_hand = [Card(random.choice(all_ranks), random.choice(all_suits)) for _ in range(len(self.hand))]
-                    if mcts_rust:
-                        result = mcts_rust.simulate_playout_py(
-                            json.dumps([card_to_dict(c) for c in ai_hand]),
-                            json.dumps([card_to_dict(c) for c in opp_hand]),
-                            json.dumps([card_to_dict(c) for c in play.cards]),
-                            json.dumps([]),  # last_combo, can be improved
-                            True,
-                            use_alpha_beta,
-                            depth
-                        )
-                        if result:
-                            wins += 1
-                    else:
-                        # fallback: always lose
-                        pass
-                if wins > best_score:
-                    best_score = wins
-                    best_play = play
-            return best_play if best_play else random.choice(valid_plays)
+            # Always convert Combo to dict of cards for JSON serialization
+            if last_combo:
+                combo_type = getattr(last_combo, 'type', 'SINGLE')
+                if hasattr(combo_type, 'name'):
+                    combo_type = combo_type.name
+                last_combo_json = json.dumps({
+                    'cards': [card_to_dict(c) for c in last_combo.cards],
+                    'combo_type': combo_type,
+                    'lead_value': getattr(last_combo, 'lead_value', 0)
+                })
+            else:
+                last_combo_json = json.dumps(None)
+            try:
+                result = mcts_rust.minimax_search_py(
+                    ai_hand_json,
+                    last_combo_json,
+                    opp_hand_json,
+                    getattr(self, 'hp', 10),
+                    game_state.get('opponent_hp', 10),
+                    depth
+                )
+                if hasattr(result, 'unwrap'):
+                    result = result.unwrap()
+                if result and result != 'null':
+                    # Parse Combo from JSON
+                    combo_dict = json.loads(result)
+                    # Reconstruct Combo as in ComboType
+                    combo_cards = [Card(c['rank'], c['suit']) for c in combo_dict['cards']]
+                    combo_type = combo_dict.get('combo_type', 'SINGLE')
+                    lead_value = combo_dict.get('lead_value', 0)
+                    # Try to match to a valid play
+                    for play in valid_plays:
+                        if set((c.rank, str(c.suit)) for c in play.cards) == set((c['rank'], str(c['suit'])) for c in combo_dict['cards']):
+                            return play
+            except Exception:
+                pass
+        # Fallback: random play
+        return random.choice(valid_plays)

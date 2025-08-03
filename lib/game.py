@@ -3,7 +3,7 @@ import random
 from lib.map import RogueMap
 from lib.card import Card, Suit
 from lib.combo import identify_combo
-from lib.player import RoguePlayer, FightPlayer, AIFightPlayer, SmartAIPlayer
+from lib.player import RoguePlayer, FightPlayer, SmartAIPlayer
 from lib.constants import *
 
 
@@ -228,9 +228,6 @@ class FightGame:
         if self.current_player != self.ai or self.game_over:
             return
 
-        # AI thinking delay
-        pygame.time.wait(1000)
-
         # AI chooses play
         combo = self.ai.choose_play(
             self.last_combo,
@@ -241,7 +238,6 @@ class FightGame:
                 "ai_hp": self.ai.hp,
             },
         )
-
         if combo:
             self.play_cards(self.ai, combo.cards)
             self.current_player = self.player
