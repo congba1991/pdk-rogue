@@ -168,7 +168,7 @@ class FightPlayer:
         self.name = name
         self.is_ai = is_ai
         self.hand = []
-        self.hp = 10
+        self.hp = 5
 
     def sort_hand(self):
         self.hand.sort()
