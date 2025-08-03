@@ -1,3 +1,11 @@
+# Export SmartAIPlayer for use in other modules
+__all__ = [
+    'RoguePlayer',
+    'FightPlayer',
+    'AIFightPlayer',
+    'SmartAIPlayer',
+]
+
 from lib.card import Card
 from lib.combo import identify_combo, ComboType
 from collections import defaultdict
@@ -19,30 +27,11 @@ class RoguePlayer:
 
 
 class FightPlayer:
-    def __init__(self, name, is_ai=False):
-        self.name = name
-        self.is_ai = is_ai
-        self.hand = []
-        self.hp = 10
-
-    def sort_hand(self):
-        self.hand.sort()
-
-    def remove_cards(self, cards):
-        for card in cards:
-            self.hand.remove(card)
-
-
-class AIFightPlayer(FightPlayer):
-    def __init__(self, name):
-        super().__init__(name, is_ai=True)
-
     def find_valid_plays(self, last_combo):
-        # ...existing code...
-        valid_combos = []
         value_groups = defaultdict(list)
         for card in self.hand:
             value_groups[card.value].append(card)
+        valid_combos = []
         if last_combo is None:
             for card in self.hand:
                 combo = identify_combo([card])
@@ -97,7 +86,6 @@ class AIFightPlayer(FightPlayer):
         return valid_combos
 
     def _find_straights(self, target_length=None):
-        # ...existing code...
         straights = []
         values = sorted(set(card.value for card in self.hand if card.value <= 14))
         min_length = target_length if target_length else 5
@@ -124,7 +112,6 @@ class AIFightPlayer(FightPlayer):
         return straights
 
     def _find_planes(self):
-        # ...existing code...
         planes = []
         value_groups = defaultdict(list)
         for card in self.hand:
@@ -179,6 +166,74 @@ class AIFightPlayer(FightPlayer):
                             if combo and combo.type == ComboType.PLANE_WITH_PAIRS:
                                 planes.append(combo)
         return planes
+    def __init__(self, name, is_ai=False):
+        self.name = name
+        self.is_ai = is_ai
+        self.hand = []
+        self.hp = 10
+
+    def sort_hand(self):
+        self.hand.sort()
+
+    def remove_cards(self, cards):
+        for card in cards:
+            self.hand.remove(card)
+
+
+class SmartAIPlayer(FightPlayer):
+    def __init__(self, name):
+        super().__init__(name, is_ai=True)
+
+    def choose_play(self, last_combo, game_state, depth=10):
+        def card_to_dict(card):
+            return {'rank': card.rank, 'suit': card.suit.value if hasattr(card.suit, 'value') else card.suit}
+
+        valid_plays = self.find_valid_plays(last_combo)
+        if not valid_plays:
+            return None
+        if len(valid_plays) == 1:
+            return valid_plays[0]
+
+        # Always use Rust alpha-beta if available
+        if mcts_rust and hasattr(mcts_rust, 'alpha_beta_py'):
+            ai_hand_json = json.dumps([card_to_dict(c) for c in self.hand])
+            # Estimate opponent hand (fallback: same size, random cards)
+            opp_hand = [Card(c.rank, c.suit) for c in game_state.get('opponent_hand', [])] if 'opponent_hand' in game_state else [Card('3', '♦')]*len(self.hand)
+            if not opp_hand:
+                all_ranks = list(Card.VALUE_MAP.keys())
+                all_suits = list(set(c.suit for c in self.hand))
+                opp_hand = [Card(random.choice(all_ranks), random.choice(all_suits)) for _ in range(len(self.hand))]
+            opp_hand_json = json.dumps([card_to_dict(c) for c in opp_hand])
+            last_combo_json = json.dumps([card_to_dict(c) for c in last_combo.cards]) if last_combo else json.dumps([])
+            best_play = None
+            best_score = -float('inf')
+            for play in valid_plays:
+                play_json = json.dumps([card_to_dict(c) for c in play.cards])
+                try:
+                    score = mcts_rust.alpha_beta_py(
+                        ai_hand_json,
+                        opp_hand_json,
+                        play_json,
+                        last_combo_json,
+                        True,
+                        depth
+                    )
+                    if hasattr(score, 'unwrap'):  # PyO3 may return a Result
+                        score = score.unwrap()
+                except Exception:
+                    score = 0
+                if score > best_score:
+                    best_score = score
+                    best_play = play
+            return best_play if best_play else random.choice(valid_plays)
+        else:
+            # Fallback: random play
+            return random.choice(valid_plays)
+
+class AIFightPlayer(FightPlayer):
+    def __init__(self, name):
+        super().__init__(name, is_ai=True)
+
 
     def choose_play(self, last_combo, game_state, num_simulations=100, use_alpha_beta=True, depth=4):
         def card_to_dict(card):

@@ -3,7 +3,7 @@ import random
 from lib.map import RogueMap
 from lib.card import Card, Suit
 from lib.combo import identify_combo
-from lib.player import RoguePlayer, FightPlayer, AIFightPlayer
+from lib.player import RoguePlayer, FightPlayer, AIFightPlayer, SmartAIPlayer
 from lib.constants import *
 
 
@@ -31,7 +31,7 @@ class FightGame:
         self.big_font = pygame.font.Font(None, 36)
 
         self.player = FightPlayer("Player")
-        self.ai = AIFightPlayer("AI")
+        self.ai = SmartAIPlayer("AI")
         self.current_player = None
         self.last_combo = None
         self.last_player = None

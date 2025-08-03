@@ -1,12 +1,46 @@
 // Simple evaluation: +1 for AI win, -1 for player win, 0 otherwise
+
+// Heuristic evaluation for non-terminal states
 fn evaluate(ai_hand: &[Card], player_hand: &[Card], ai_hp: i32, player_hp: i32) -> i32 {
     if ai_hand.is_empty() || player_hp <= 0 {
-        1
+        return 10000;
     } else if player_hand.is_empty() || ai_hp <= 0 {
-        -1
-    } else {
-        0
+        return -10000;
     }
+    // Heuristic: fewer cards, more bombs, more high cards, more HP
+    let mut score = 0;
+    // Card count
+    score -= ai_hand.len() as i32 * 50;
+    score += player_hand.len() as i32 * 50;
+    // Bombs
+    let mut ai_counts = std::collections::HashMap::new();
+    let mut player_counts = std::collections::HashMap::new();
+    for c in ai_hand {
+        *ai_counts.entry(&c.rank).or_insert(0) += 1;
+    }
+    for c in player_hand {
+        *player_counts.entry(&c.rank).or_insert(0) += 1;
+    }
+    for v in ai_counts.values() {
+        if *v == 4 { score += 200; }
+        if *v == 3 { score += 50; }
+        if *v == 2 { score += 10; }
+    }
+    for v in player_counts.values() {
+        if *v == 4 { score -= 200; }
+        if *v == 3 { score -= 50; }
+        if *v == 2 { score -= 10; }
+    }
+    // High cards (A, 2)
+    for c in ai_hand {
+        if c.rank == "A" || c.rank == "2" { score += 30; }
+    }
+    for c in player_hand {
+        if c.rank == "A" || c.rank == "2" { score -= 30; }
+    }
+    // HP
+    score += (ai_hp - player_hp) * 20;
+    score
 }
 
 fn alpha_beta(
@@ -17,106 +51,101 @@ fn alpha_beta(
     ai_turn: bool,
     last_combo: Option<Combo>,
     depth: usize,
-    alpha: i32,
-    beta: i32,
+    mut alpha: i32,
+    mut beta: i32,
 ) -> i32 {
     // Terminal state or depth limit
     if ai_hand.is_empty() || player_hand.is_empty() || ai_hp <= 0 || player_hp <= 0 || depth == 0 {
         return evaluate(ai_hand, player_hand, ai_hp, player_hp);
     }
-    let mut alpha = alpha;
-    let mut beta = beta;
+
     if ai_turn {
         // Maximizing player (AI)
-        let valid = find_opponent_valid_plays(ai_hand, last_combo.as_ref());
-        if valid.is_empty() {
-            // Pass: lose 1 HP
-            let score = alpha_beta(
-                ai_hand,
-                player_hand,
-                ai_hp - 1,
-                player_hp,
-                false,
-                None,
-                depth - 1,
-                alpha,
-                beta,
-            );
-            alpha = alpha.max(score);
-            return alpha;
-        }
-        let mut value = i32::MIN;
+        let mut best_score = i32::MIN;
+        let mut valid = find_opponent_valid_plays(ai_hand, last_combo.as_ref());
+        // Add pass as a move (None)
+        valid.push(Combo { cards: vec![], combo_type: "PASS".to_string(), lead_value: 0 });
         for mv in valid {
-            // Remove played cards
             let mut new_ai = ai_hand.clone();
-            for c in &mv.cards {
-                if let Some(pos) = new_ai.iter().position(|x| x.rank == c.rank && x.suit == c.suit) {
-                    new_ai.remove(pos);
+            let mut new_ai_hp = ai_hp;
+            let mut new_last_combo = last_combo.clone();
+            if mv.combo_type == "PASS" {
+                new_ai_hp -= 1;
+                new_last_combo = None;
+            } else {
+                for c in &mv.cards {
+                    if let Some(pos) = new_ai.iter().position(|x| x.rank == c.rank && x.suit == c.suit) {
+                        new_ai.remove(pos);
+                    }
                 }
+                new_last_combo = Some(mv.clone());
             }
             let score = alpha_beta(
                 &mut new_ai,
                 player_hand,
-                ai_hp,
+                new_ai_hp,
                 player_hp,
                 false,
-                Some(mv.clone()),
+                new_last_combo,
                 depth - 1,
                 alpha,
                 beta,
             );
-            value = value.max(score);
-            alpha = alpha.max(value);
-            if alpha >= beta {
+            let eval_score = score;
+            if eval_score > best_score {
+                best_score = eval_score;
+            }
+            if best_score > alpha {
+                alpha = best_score;
+            }
+            if beta <= alpha {
                 break;
             }
         }
-        value
+        best_score
     } else {
         // Minimizing player (opponent)
-        let valid = find_opponent_valid_plays(player_hand, last_combo.as_ref());
-        if valid.is_empty() {
-            // Pass: lose 1 HP
-            let score = alpha_beta(
-                ai_hand,
-                player_hand,
-                ai_hp,
-                player_hp - 1,
-                true,
-                None,
-                depth - 1,
-                alpha,
-                beta,
-            );
-            beta = beta.min(score);
-            return beta;
-        }
-        let mut value = i32::MAX;
+        let mut best_score = i32::MAX;
+        let mut valid = find_opponent_valid_plays(player_hand, last_combo.as_ref());
+        valid.push(Combo { cards: vec![], combo_type: "PASS".to_string(), lead_value: 0 });
         for mv in valid {
             let mut new_player = player_hand.clone();
-            for c in &mv.cards {
-                if let Some(pos) = new_player.iter().position(|x| x.rank == c.rank && x.suit == c.suit) {
-                    new_player.remove(pos);
+            let mut new_player_hp = player_hp;
+            let mut new_last_combo = last_combo.clone();
+            if mv.combo_type == "PASS" {
+                new_player_hp -= 1;
+                new_last_combo = None;
+            } else {
+                for c in &mv.cards {
+                    if let Some(pos) = new_player.iter().position(|x| x.rank == c.rank && x.suit == c.suit) {
+                        new_player.remove(pos);
+                    }
                 }
+                new_last_combo = Some(mv.clone());
             }
             let score = alpha_beta(
                 ai_hand,
                 &mut new_player,
                 ai_hp,
-                player_hp,
+                new_player_hp,
                 true,
-                Some(mv.clone()),
+                new_last_combo,
                 depth - 1,
                 alpha,
                 beta,
             );
-            value = value.min(score);
-            beta = beta.min(value);
-            if alpha >= beta {
+            let eval_score = score;
+            if eval_score < best_score {
+                best_score = eval_score;
+            }
+            if best_score < beta {
+                beta = best_score;
+            }
+            if beta <= alpha {
                 break;
             }
         }
-        value
+        best_score
     }
 }
 
