@@ -180,7 +180,7 @@ class AIFightPlayer(FightPlayer):
                                 planes.append(combo)
         return planes
 
-    def choose_play(self, last_combo, game_state, num_simulations=1000):
+    def choose_play(self, last_combo, game_state, num_simulations=100, use_alpha_beta=True, depth=4):
         def card_to_dict(card):
             return {'rank': card.rank, 'suit': card.suit.value if hasattr(card.suit, 'value') else card.suit}
 
@@ -193,7 +193,7 @@ class AIFightPlayer(FightPlayer):
         best_play = None
         best_score = -1
         if mcts_rust and hasattr(mcts_rust, 'simulate_playouts_parallel_py'):
-            # Use parallelized Rust MCTS
+            # Use parallelized Rust MCTS or alpha-beta
             ai_hand_json = json.dumps([card_to_dict(c) for c in self.hand])
             opp_hand = [Card(c.rank, c.suit) for c in game_state.get('opponent_hand', [])] if 'opponent_hand' in game_state else [Card('3', '♦')]*len(self.hand)
             if not opp_hand:
@@ -211,7 +211,9 @@ class AIFightPlayer(FightPlayer):
                         play_json,
                         last_combo_json,
                         True,
-                        num_simulations
+                        num_simulations,
+                        use_alpha_beta,
+                        depth
                     )
                 except Exception:
                     wins = 0
@@ -236,7 +238,9 @@ class AIFightPlayer(FightPlayer):
                             json.dumps([card_to_dict(c) for c in opp_hand]),
                             json.dumps([card_to_dict(c) for c in play.cards]),
                             json.dumps([]),  # last_combo, can be improved
-                            True
+                            True,
+                            use_alpha_beta,
+                            depth
                         )
                         if result:
                             wins += 1
