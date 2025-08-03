@@ -138,10 +138,10 @@ fn alpha_beta_py(
     };
     // Remove played cards from AI hand
     ai_hand.retain(|c| !play.iter().any(|p| p.rank == c.rank && p.suit == c.suit));
-    let mut ai_hp = 10;
-    let mut player_hp = 10;
-    let mut ai_turn = !is_ai_turn;
-    let mut last_combo = if !play.is_empty() {
+    let ai_hp = 10;
+    let player_hp = 10;
+    let ai_turn = !is_ai_turn;
+    let last_combo = if !play.is_empty() {
         // Try to detect the combo type based on the cards in play
         let combo_type = if play.len() == 1 {
             "SINGLE".to_string()
@@ -203,7 +203,6 @@ fn alpha_beta_py(
 }
 use pyo3::prelude::*;
 use pyo3::types::PyString;
-use serde::Deserialize;
 use rand::seq::SliceRandom;
 use rayon::prelude::*;
 
