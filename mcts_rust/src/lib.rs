@@ -45,7 +45,7 @@ fn evaluate(ai_hand: &[Card], player_hand: &[Card], ai_hp: i32, player_hp: i32) 
 
 fn alpha_beta(
     ai_hand: &mut Vec<Card>,
-    player_hand: &mut Vec<Card>,
+    mut player_hand: &mut Vec<Card>,
     ai_hp: i32,
     player_hp: i32,
     ai_turn: bool,
@@ -61,11 +61,11 @@ fn alpha_beta(
 
     if ai_turn {
         // Maximizing player (AI)
-        let mut best_score = i32::MIN;
         let mut valid = find_opponent_valid_plays(ai_hand, last_combo.as_ref());
-        // Add pass as a move (None)
         valid.push(Combo { cards: vec![], combo_type: "PASS".to_string(), lead_value: 0 });
-        for mv in valid {
+        use rayon::prelude::*;
+        let player_hand_cloned = player_hand.clone();
+        let scores: Vec<i32> = valid.par_iter().map(|mv| {
             let mut new_ai = ai_hand.clone();
             let mut new_ai_hp = ai_hp;
             let mut new_last_combo = last_combo.clone();
@@ -80,9 +80,10 @@ fn alpha_beta(
                 }
                 new_last_combo = Some(mv.clone());
             }
-            let score = alpha_beta(
+            let mut player_hand_branch = player_hand_cloned.clone();
+            alpha_beta(
                 &mut new_ai,
-                player_hand,
+                &mut player_hand_branch,
                 new_ai_hp,
                 player_hp,
                 false,
@@ -90,25 +91,16 @@ fn alpha_beta(
                 depth - 1,
                 alpha,
                 beta,
-            );
-            let eval_score = score;
-            if eval_score > best_score {
-                best_score = eval_score;
-            }
-            if best_score > alpha {
-                alpha = best_score;
-            }
-            if beta <= alpha {
-                break;
-            }
-        }
-        best_score
+            )
+        }).collect();
+        *scores.iter().max().unwrap_or(&i32::MIN)
     } else {
         // Minimizing player (opponent)
-        let mut best_score = i32::MAX;
         let mut valid = find_opponent_valid_plays(player_hand, last_combo.as_ref());
         valid.push(Combo { cards: vec![], combo_type: "PASS".to_string(), lead_value: 0 });
-        for mv in valid {
+        use rayon::prelude::*;
+        let ai_hand_cloned = ai_hand.clone();
+        let scores: Vec<i32> = valid.par_iter().map(|mv| {
             let mut new_player = player_hand.clone();
             let mut new_player_hp = player_hp;
             let mut new_last_combo = last_combo.clone();
@@ -123,8 +115,9 @@ fn alpha_beta(
                 }
                 new_last_combo = Some(mv.clone());
             }
-            let score = alpha_beta(
-                ai_hand,
+            let mut ai_hand_branch = ai_hand_cloned.clone();
+            alpha_beta(
+                &mut ai_hand_branch,
                 &mut new_player,
                 ai_hp,
                 new_player_hp,
@@ -133,19 +126,9 @@ fn alpha_beta(
                 depth - 1,
                 alpha,
                 beta,
-            );
-            let eval_score = score;
-            if eval_score < best_score {
-                best_score = eval_score;
-            }
-            if best_score < beta {
-                beta = best_score;
-            }
-            if beta <= alpha {
-                break;
-            }
-        }
-        best_score
+            )
+        }).collect();
+        *scores.iter().min().unwrap_or(&i32::MAX)
     }
 }
 
