@@ -182,7 +182,7 @@ class SmartAIPlayer(FightPlayer):
     def __init__(self, name):
         super().__init__(name, is_ai=True)
 
-    def choose_play(self, last_combo, game_state, depth=10):
+    def choose_play(self, last_combo, game_state, depth=20):
         def card_to_dict(card):
             return {'rank': card.rank, 'suit': card.suit.value if hasattr(card.suit, 'value') else card.suit}
 
