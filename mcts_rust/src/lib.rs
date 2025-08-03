@@ -1,3 +1,381 @@
+// Evaluate overall hand strength (like _evaluate_hand_strength)
+fn evaluate_hand_strength(hand: &[Card]) -> i32 {
+    if hand.is_empty() {
+        return 0;
+    }
+    let mut strength = 0;
+    for card in hand {
+        let v = card_value(&card.rank);
+        if v >= 13 { // K, A, 2
+            strength += (v as i32 - 10) * 3;
+        }
+    }
+    let mut value_counts = std::collections::HashMap::new();
+    for card in hand {
+        *value_counts.entry(&card.rank).or_insert(0) += 1;
+    }
+    for v in value_counts.values() {
+        if *v == 4 {
+            strength += 50;
+        }
+    }
+    strength
+}
+
+// Count control cards (like _count_controls)
+fn count_controls(hand: &[Card]) -> f32 {
+    let mut value_counts = std::collections::HashMap::new();
+    for card in hand {
+        *value_counts.entry(&card.rank).or_insert(0) += 1;
+    }
+    let mut controls = 0.0;
+    controls += *value_counts.get(&"2".to_string()).unwrap_or(&0) as f32;
+    controls += *value_counts.get(&"A".to_string()).unwrap_or(&0) as f32 * 0.7;
+    for v in value_counts.values() {
+        if *v == 4 {
+            controls += 2.0;
+        }
+    }
+    controls
+}
+
+// Analyze hand shape (like _analyze_hand_shape)
+fn analyze_hand_shape(hand: &[Card]) -> i32 {
+    if hand.is_empty() {
+        return 0;
+    }
+    let mut value_counts = std::collections::HashMap::new();
+    for card in hand {
+        *value_counts.entry(&card.rank).or_insert(0) += 1;
+    }
+    let mut shape_score = 0;
+    let singles = value_counts.values().filter(|&&v| v == 1).count() as i32;
+    shape_score -= singles * 5;
+    let pairs = value_counts.values().filter(|&&v| v == 2).count() as i32;
+    let triples = value_counts.values().filter(|&&v| v == 3).count() as i32;
+    shape_score += pairs * 3 + triples * 5;
+    let mut values: Vec<u8> = value_counts.keys().map(|r| card_value(r)).collect();
+    values.sort_unstable();
+    let mut consecutive = 0;
+    for i in 1..values.len() {
+        if values[i] == values[i-1] + 1 && values[i] <= 14 {
+            consecutive += 1;
+        } else {
+            if consecutive >= 4 {
+                shape_score += consecutive * 2;
+            }
+            consecutive = 0;
+        }
+    }
+    shape_score
+}
+
+// Estimate minimum turns to win (like _estimate_turns_to_win)
+fn estimate_turns_to_win(hand: &[Card]) -> i32 {
+    if hand.is_empty() {
+        return 0;
+    }
+    let mut value_groups: std::collections::HashMap<&String, Vec<&Card>> = std::collections::HashMap::new();
+    for card in hand {
+        value_groups.entry(&card.rank).or_default().push(card);
+    }
+    let mut turns = 0;
+    let mut remaining_cards: Vec<&Card> = hand.iter().collect();
+    // Bombs
+    for (value, cards) in value_groups.iter() {
+        if cards.len() == 4 {
+            turns += 1;
+            remaining_cards.retain(|c| &c.rank != *value);
+        }
+    }
+    // Triples
+    let mut value_groups: std::collections::HashMap<&String, Vec<&Card>> = std::collections::HashMap::new();
+    for card in &remaining_cards {
+        value_groups.entry(&card.rank).or_default().push(card);
+    }
+    for (value, cards) in value_groups.clone() {
+        if cards.len() >= 3 {
+            turns += 1;
+            let mut count = 0;
+            remaining_cards.retain(|c| {
+                if &c.rank == value && count < 3 {
+                    count += 1;
+                    false
+                } else {
+                    true
+                }
+            });
+        }
+    }
+    // Pairs
+    let mut value_groups: std::collections::HashMap<&String, Vec<&Card>> = std::collections::HashMap::new();
+    for card in &remaining_cards {
+        value_groups.entry(&card.rank).or_default().push(card);
+    }
+    for (value, cards) in value_groups.clone() {
+        if cards.len() >= 2 {
+            turns += 1;
+            let mut found = 0;
+            remaining_cards.retain(|c| {
+                if &c.rank == value && found < 2 {
+                    found += 1;
+                    false
+                } else {
+                    true
+                }
+            });
+        }
+    }
+    // Singles
+    turns += remaining_cards.len() as i32;
+    std::cmp::max(turns, (hand.len() as i32) / 5)
+}
+
+// Evaluate the current game position with a specific hand (like _evaluate_position_with_hand)
+fn evaluate_position_with_hand(hand: &[Card]) -> i32 {
+    let mut score = 0;
+    let hand_strength = evaluate_hand_strength(hand);
+    score += hand_strength * 10;
+    score -= hand.len() as i32 * 50;
+    let controls = count_controls(hand);
+    score += (controls * 100.0) as i32;
+    let shape_score = analyze_hand_shape(hand);
+    score += shape_score * 20;
+    let turns = estimate_turns_to_win(hand);
+    score -= turns * 200;
+    score
+}
+// Estimate likely opponent responses for a given last_combo
+fn estimate_opponent_responses(player_hand: &[Card], last_combo: Option<&Combo>) -> Vec<Combo> {
+    let mut responses = Vec::new();
+    let valid_plays = find_opponent_valid_plays(player_hand, last_combo);
+    if last_combo.is_none() {
+        // If no last combo, return a few low and mid-value singles/pairs, and pass
+        let mut singles: Vec<_> = valid_plays.iter().filter(|c| c.combo_type == "SINGLE").collect();
+        singles.sort_by_key(|c| c.lead_value);
+        for s in singles.iter().take(2) {
+            responses.push((*s).clone());
+        }
+        let mut pairs: Vec<_> = valid_plays.iter().filter(|c| c.combo_type == "PAIR").collect();
+        pairs.sort_by_key(|c| c.lead_value);
+        if let Some(p) = pairs.get(0) { responses.push((*p).clone()); }
+        responses.push(Combo { cards: vec![], combo_type: "PASS".to_string(), lead_value: 0 });
+    } else {
+        // Try to beat last_combo with valid plays
+        for c in valid_plays.iter() {
+            if c.lead_value > last_combo.unwrap().lead_value {
+                responses.push(c.clone());
+            }
+        }
+        responses.push(Combo { cards: vec![], combo_type: "PASS".to_string(), lead_value: 0 });
+        // Consider bomb if not already a bomb
+        if last_combo.unwrap().combo_type != "BOMB" {
+            let bombs: Vec<_> = valid_plays.iter().filter(|c| c.combo_type == "BOMB").collect();
+            if let Some(b) = bombs.get(0) { responses.push((*b).clone()); }
+        }
+    }
+    // Limit to 5 for performance
+    responses.truncate(5);
+    responses
+}
+
+// Evaluate a specific move with a specific hand (Rust version of _evaluate_move_with_hand)
+fn evaluate_move_with_hand(combo: &Combo, last_combo: Option<&Combo>, hand: &[Card]) -> i32 {
+    if combo.combo_type == "PASS" {
+        return -50;
+    }
+    let mut score = 0;
+    // Prefer to get rid of low singles early
+    if combo.combo_type == "SINGLE" && combo.lead_value < 10 {
+        score += 30;
+    }
+    // Prefer to keep high cards and bombs
+    let avg_value = if !combo.cards.is_empty() {
+        combo.cards.iter().map(|c| card_value(&c.rank) as i32).sum::<i32>() / combo.cards.len() as i32
+    } else { 0 };
+    score -= avg_value * 2;
+    // Bonus for using many cards at once
+    score += combo.cards.len() as i32 * 10;
+    // Penalty for breaking up potential combinations (simple: count pairs/triples before/after)
+    let mut value_counts = std::collections::HashMap::new();
+    for c in hand {
+        *value_counts.entry(&c.rank).or_insert(0) += 1;
+    }
+    let shape_before = value_counts.values().filter(|&&v| v == 2).count() as i32 * 3 + value_counts.values().filter(|&&v| v == 3).count() as i32 * 5;
+    let mut remaining_hand = hand.to_vec();
+    for c in &combo.cards {
+        if let Some(pos) = remaining_hand.iter().position(|x| x.rank == c.rank && x.suit == c.suit) {
+            remaining_hand.remove(pos);
+        }
+    }
+    let mut value_counts_after = std::collections::HashMap::new();
+    for c in &remaining_hand {
+        *value_counts_after.entry(&c.rank).or_insert(0) += 1;
+    }
+    let shape_after = value_counts_after.values().filter(|&&v| v == 2).count() as i32 * 3 + value_counts_after.values().filter(|&&v| v == 3).count() as i32 * 5;
+    score -= (shape_before - shape_after) * 15;
+    // Penalty for using bombs too early
+    if combo.combo_type == "BOMB" && hand.len() > 10 {
+        score -= 200;
+    }
+    score
+}
+use serde::{Serialize, Deserialize};
+
+#[pyfunction]
+fn minimax_search_py(
+    ai_hand_json: &PyString,
+    last_combo_json: &PyString,
+    player_hand_json: &PyString,
+    ai_hp: i32,
+    player_hp: i32,
+    depth: usize
+) -> PyResult<String> {
+    let ai_hand: Vec<Card> = serde_json::from_str(ai_hand_json.to_str()?).unwrap();
+    let player_hand: Vec<Card> = serde_json::from_str(player_hand_json.to_str()?).unwrap();
+    let last_combo: Option<Combo> = match serde_json::from_str::<Combo>(last_combo_json.to_str()?) {
+        Ok(combo) => Some(combo),
+        Err(_) => None,
+    };
+    let (best_combo, _score) = minimax_search(
+        &ai_hand,
+        &player_hand,
+        ai_hp,
+        player_hp,
+        last_combo.as_ref(),
+        depth,
+        true,
+        i32::MIN + 1,
+        i32::MAX - 1,
+    );
+    let result = match best_combo {
+        Some(combo) => serde_json::to_string(&combo).unwrap(),
+        None => "null".to_string(),
+    };
+    Ok(result)
+}
+
+fn minimax_search(
+    ai_hand: &[Card],
+    player_hand: &[Card],
+    ai_hp: i32,
+    player_hp: i32,
+    last_combo: Option<&Combo>,
+    depth: usize,
+    is_maximizing: bool,
+    mut alpha: i32,
+    mut beta: i32,
+) -> (Option<Combo>, i32) {
+    // Terminal or depth limit
+    if depth == 0 || ai_hand.is_empty() || player_hand.is_empty() || ai_hp <= 0 || player_hp <= 0 {
+        let eval = evaluate_position_with_hand(ai_hand) - evaluate_position_with_hand(player_hand);
+        return (None, eval);
+    }
+    if is_maximizing {
+        let mut max_eval = i32::MIN;
+        let mut best_play = None;
+        let mut valid_plays = find_opponent_valid_plays(ai_hand, last_combo);
+        if last_combo.is_some() {
+            valid_plays.push(Combo { cards: vec![], combo_type: "PASS".to_string(), lead_value: 0 });
+        }
+        for play in valid_plays {
+            let mut new_ai = ai_hand.to_vec();
+            let mut new_ai_hp = ai_hp;
+            let mut new_last_combo = last_combo.cloned();
+            if play.combo_type == "PASS" {
+                new_ai_hp -= 1;
+                new_last_combo = last_combo.cloned();
+            } else {
+                for c in &play.cards {
+                    if let Some(pos) = new_ai.iter().position(|x| x.rank == c.rank && x.suit == c.suit) {
+                        new_ai.remove(pos);
+                    }
+                }
+                new_last_combo = Some(play.clone());
+            }
+            // Generate opponent's possible responses
+            let opponent_plays = estimate_opponent_responses(player_hand, new_last_combo.as_ref());
+            // Recursively evaluate with the new hand state
+            let mut eval = i32::MIN;
+            for opp_play in &opponent_plays {
+                let (_opp_play, opp_eval) = minimax_search(
+                    &new_ai,
+                    player_hand,
+                    new_ai_hp,
+                    player_hp,
+                    Some(opp_play),
+                    depth - 1,
+                    false,
+                    alpha,
+                    beta,
+                );
+                eval = eval.max(opp_eval);
+            }
+            // Add immediate move evaluation
+            if play.combo_type != "PASS" {
+                eval += (evaluate_move_with_hand(&play, last_combo, ai_hand) as f32 * 0.3) as i32;
+            }
+            if eval > max_eval {
+                max_eval = eval;
+                best_play = Some(play.clone());
+            }
+            alpha = alpha.max(eval);
+            if beta <= alpha {
+                break;
+            }
+        }
+        (best_play, max_eval)
+    } else {
+        let mut min_eval = i32::MAX;
+        let mut best_play = None;
+        let mut valid_plays = find_opponent_valid_plays(player_hand, last_combo);
+        if last_combo.is_some() {
+            valid_plays.push(Combo { cards: vec![], combo_type: "PASS".to_string(), lead_value: 0 });
+        }
+        for play in valid_plays {
+            let mut new_player = player_hand.to_vec();
+            let mut new_player_hp = player_hp;
+            let mut new_last_combo = last_combo.cloned();
+            if play.combo_type == "PASS" {
+                new_player_hp -= 1;
+                new_last_combo = last_combo.cloned();
+            } else {
+                for c in &play.cards {
+                    if let Some(pos) = new_player.iter().position(|x| x.rank == c.rank && x.suit == c.suit) {
+                        new_player.remove(pos);
+                    }
+                }
+                new_last_combo = Some(play.clone());
+            }
+            // Our possible responses based on simulated hand
+            let our_responses = estimate_opponent_responses(ai_hand, new_last_combo.as_ref());
+            let mut eval = i32::MAX;
+            for our_play in &our_responses {
+                let (_ai_play, ai_eval) = minimax_search(
+                    ai_hand,
+                    &new_player,
+                    ai_hp,
+                    new_player_hp,
+                    Some(our_play),
+                    depth - 1,
+                    true,
+                    alpha,
+                    beta,
+                );
+                eval = eval.min(ai_eval);
+            }
+            if eval < min_eval {
+                min_eval = eval;
+                best_play = Some(play.clone());
+            }
+            beta = beta.min(eval);
+            if beta <= alpha {
+                break;
+            }
+        }
+        (best_play, min_eval)
+    }
+}
 // Simple evaluation: +1 for AI win, -1 for player win, 0 otherwise
 
 // Heuristic evaluation for non-terminal states
@@ -22,11 +400,13 @@ fn evaluate(ai_hand: &[Card], player_hand: &[Card], ai_hp: i32, player_hp: i32) 
         *player_counts.entry(&c.rank).or_insert(0) += 1;
     }
     for v in ai_counts.values() {
+        if *v >= 5 { score += 600; }
         if *v == 4 { score += 200; }
         if *v == 3 { score += 50; }
         if *v == 2 { score += 10; }
     }
     for v in player_counts.values() {
+        if *v >= 5 { score -= 600; }
         if *v == 4 { score -= 200; }
         if *v == 3 { score -= 50; }
         if *v == 2 { score -= 10; }
@@ -63,7 +443,6 @@ fn alpha_beta(
         // Maximizing player (AI)
         let mut valid = find_opponent_valid_plays(ai_hand, last_combo.as_ref());
         valid.push(Combo { cards: vec![], combo_type: "PASS".to_string(), lead_value: 0 });
-        use rayon::prelude::*;
         let player_hand_cloned = player_hand.clone();
         let scores: Vec<i32> = valid.par_iter().map(|mv| {
             let mut new_ai = ai_hand.clone();
@@ -98,7 +477,6 @@ fn alpha_beta(
         // Minimizing player (opponent)
         let mut valid = find_opponent_valid_plays(player_hand, last_combo.as_ref());
         valid.push(Combo { cards: vec![], combo_type: "PASS".to_string(), lead_value: 0 });
-        use rayon::prelude::*;
         let ai_hand_cloned = ai_hand.clone();
         let scores: Vec<i32> = valid.par_iter().map(|mv| {
             let mut new_player = player_hand.clone();
@@ -220,13 +598,13 @@ use rayon::prelude::*;
 
 use std::collections::HashMap;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, serde::Deserialize)]
 pub struct Card {
     pub rank: String,
     pub suit: String,
 }
 
-#[derive(Clone, Debug, serde::Deserialize)]
+#[derive(Clone, Debug, Serialize, serde::Deserialize)]
 pub struct Combo {
     pub cards: Vec<Card>,
     pub combo_type: String, // "SINGLE", "PAIR", "TRIPLE"
@@ -577,6 +955,7 @@ fn mcts_rust(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(simulate_playout_py, m)?)?;
     m.add_function(wrap_pyfunction!(simulate_playouts_parallel_py, m)?)?;
     m.add_function(wrap_pyfunction!(alpha_beta_py, m)?)?;
+    m.add_function(wrap_pyfunction!(minimax_search_py, m)?)?;
     Ok(())
 }
 
