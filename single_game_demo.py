@@ -25,28 +25,44 @@ BUTTON_HOVER = (39, 174, 96)
 RED_COLOR = (231, 76, 60)
 BLACK_COLOR = (26, 32, 44)
 
+
 class Suit(Enum):
     SPADES = "♠"
     HEARTS = "♥"
     DIAMONDS = "♦"
     CLUBS = "♣"
 
+
 class Card:
     # Card values: 3-10, J=11, Q=12, K=13, A=14, 2=15
-    VALUE_MAP = {'3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10,
-                 'J': 11, 'Q': 12, 'K': 13, 'A': 14, '2': 15}
-    
+    VALUE_MAP = {
+        "3": 3,
+        "4": 4,
+        "5": 5,
+        "6": 6,
+        "7": 7,
+        "8": 8,
+        "9": 9,
+        "10": 10,
+        "J": 11,
+        "Q": 12,
+        "K": 13,
+        "A": 14,
+        "2": 15,
+    }
+
     def __init__(self, rank, suit):
         self.rank = rank
         self.suit = suit
         self.value = self.VALUE_MAP[rank]
         self.selected = False
-    
+
     def __repr__(self):
         return f"{self.rank}{self.suit.value}"
-    
+
     def __lt__(self, other):
         return self.value < other.value
+
 
 class ComboType(Enum):
     SINGLE = 1
@@ -61,12 +77,13 @@ class ComboType(Enum):
     PLANE_WITH_PAIRS = 10  # Like 333444 + 7788
     BOMB = 11
 
+
 class Combo:
     def __init__(self, cards, combo_type):
         self.cards = sorted(cards)
         self.type = combo_type
         self.lead_value = self._get_lead_value()
-    
+
     def _get_lead_value(self):
         if self.type == ComboType.SINGLE:
             return self.cards[0].value
@@ -100,20 +117,20 @@ class Combo:
         elif self.type == ComboType.BOMB:
             return self.cards[0].value
         return 0
-    
+
     def can_beat(self, other):
         if other is None:
             return True
-        
+
         # Bombs beat everything except higher bombs
         if self.type == ComboType.BOMB:
             if other.type != ComboType.BOMB:
                 return True
             return self.lead_value > other.lead_value
-        
+
         if other.type == ComboType.BOMB:
             return False
-        
+
         # Same type comparison
         if self.type == other.type:
             if self.type == ComboType.STRAIGHT:
@@ -127,60 +144,61 @@ class Combo:
                 if my_triples != other_triples:
                     return False
             return self.lead_value > other.lead_value
-        
+
         return False
-    
+
     def _count_consecutive_triples(self):
         value_counts = defaultdict(int)
         for card in self.cards:
             value_counts[card.value] += 1
         triple_values = sorted([value for value, count in value_counts.items() if count >= 3])
-        
+
         if not triple_values:
             return 0
-        
+
         # Count consecutive triples
         count = 1
         for i in range(1, len(triple_values)):
-            if triple_values[i] == triple_values[i-1] + 1:
+            if triple_values[i] == triple_values[i - 1] + 1:
                 count += 1
             else:
                 break
         return count
 
+
 def identify_combo(cards):
     if not cards:
         return None
-    
+
     cards = sorted(cards)
     n = len(cards)
-    
+
     # Single
     if n == 1:
         return Combo(cards, ComboType.SINGLE)
-    
+
     # Check for same values
     value_counts = defaultdict(list)
     for card in cards:
         value_counts[card.value].append(card)
-    
+
     # Pair
     if n == 2 and len(value_counts) == 1:
         return Combo(cards, ComboType.PAIR)
-    
+
     # Triple
     if n == 3 and len(value_counts) == 1:
         return Combo(cards, ComboType.TRIPLE)
-    
+
     # Bomb (4 of same)
     if n == 4 and len(value_counts) == 1:
         return Combo(cards, ComboType.BOMB)
-    
+
     # Check for planes (consecutive triples) with attachments
     triple_values = []
     triple_cards = []
     other_cards = []
-    
+
     for value, same_cards in value_counts.items():
         if len(same_cards) >= 3:
             triple_values.append(value)
@@ -189,17 +207,17 @@ def identify_combo(cards):
                 other_cards.extend(same_cards[3:])
         else:
             other_cards.extend(same_cards)
-    
+
     if len(triple_values) >= 2:
         # Check if triples are consecutive
         triple_values.sort()
         consecutive_count = 1
         for i in range(1, len(triple_values)):
-            if triple_values[i] == triple_values[i-1] + 1 and triple_values[i] <= 14:  # No 2s
+            if triple_values[i] == triple_values[i - 1] + 1 and triple_values[i] <= 14:  # No 2s
                 consecutive_count += 1
             else:
                 break
-        
+
         if consecutive_count >= 2:
             # We have a plane base
             plane_cards = []
@@ -208,33 +226,33 @@ def identify_combo(cards):
                 for card in cards:
                     if card.value == val and len([c for c in plane_cards if c.value == val]) < 3:
                         plane_cards.append(card)
-            
+
             remaining = [c for c in cards if c not in plane_cards]
-            
+
             # Pure plane (no attachments)
             if len(remaining) == 0 and len(plane_cards) == n:
                 return Combo(cards, ComboType.PLANE)
-            
+
             # Plane with singles (like 333444 + 56)
             if len(remaining) == consecutive_count:
                 return Combo(cards, ComboType.PLANE_WITH_SINGLES)
-            
+
             # Plane with pairs (like 333444 + 5566)
             if len(remaining) == consecutive_count * 2:
                 # Check if attachments form valid pairs
                 attach_counts = defaultdict(int)
                 for card in remaining:
                     attach_counts[card.value] += 1
-                
+
                 pair_count = sum(1 for count in attach_counts.values() if count >= 2)
                 if pair_count == consecutive_count:
                     return Combo(cards, ComboType.PLANE_WITH_PAIRS)
-    
+
     # Straight (5+ consecutive cards, no 2s)
     if n >= 5:
         is_straight = True
         for i in range(1, n):
-            if cards[i].value != cards[i-1].value + 1:
+            if cards[i].value != cards[i - 1].value + 1:
                 is_straight = False
                 break
             if cards[i].value > 14:  # No 2s in straights
@@ -242,13 +260,13 @@ def identify_combo(cards):
                 break
         if is_straight and cards[0].value <= 14:
             return Combo(cards, ComboType.STRAIGHT)
-    
+
     # Triple with single
     if n == 4:
         for value, same_cards in value_counts.items():
             if len(same_cards) == 3:
                 return Combo(cards, ComboType.TRIPLE_WITH_SINGLE)
-    
+
     # Triple with pair
     if n == 5:
         has_triple = False
@@ -260,7 +278,7 @@ def identify_combo(cards):
                 has_pair = True
         if has_triple and has_pair:
             return Combo(cards, ComboType.TRIPLE_WITH_PAIR)
-    
+
     # Four with two
     if n == 6:
         has_four = False
@@ -270,8 +288,9 @@ def identify_combo(cards):
                 break
         if has_four:
             return Combo(cards, ComboType.FOUR_WITH_TWO)
-    
+
     return None
+
 
 class Player:
     def __init__(self, name, is_ai=False):
@@ -279,26 +298,27 @@ class Player:
         self.is_ai = is_ai
         self.hand = []
         self.hp = 10
-    
+
     def sort_hand(self):
         self.hand.sort()
-    
+
     def remove_cards(self, cards):
         for card in cards:
             self.hand.remove(card)
 
+
 class AIPlayer(Player):
     def __init__(self, name):
         super().__init__(name, is_ai=True)
-    
+
     def find_valid_plays(self, last_combo):
         valid_combos = []
-        
+
         # Group cards by value
         value_groups = defaultdict(list)
         for card in self.hand:
             value_groups[card.value].append(card)
-        
+
         # If no last combo, we can play anything
         if last_combo is None:
             # Try singles
@@ -306,27 +326,27 @@ class AIPlayer(Player):
                 combo = identify_combo([card])
                 if combo:
                     valid_combos.append(combo)
-            
+
             # Try pairs
             for cards in value_groups.values():
                 if len(cards) >= 2:
                     combo = identify_combo(cards[:2])
                     if combo:
                         valid_combos.append(combo)
-            
+
             # Try triples
             for cards in value_groups.values():
                 if len(cards) >= 3:
                     combo = identify_combo(cards[:3])
                     if combo:
                         valid_combos.append(combo)
-            
+
             # Try straights
             valid_combos.extend(self._find_straights())
-            
+
             # Try planes
             valid_combos.extend(self._find_planes())
-            
+
         else:
             # Find combos that can beat last_combo
             if last_combo.type == ComboType.SINGLE:
@@ -335,102 +355,102 @@ class AIPlayer(Player):
                         combo = identify_combo([card])
                         if combo:
                             valid_combos.append(combo)
-            
+
             elif last_combo.type == ComboType.PAIR:
                 for cards in value_groups.values():
                     if len(cards) >= 2 and cards[0].value > last_combo.lead_value:
                         combo = identify_combo(cards[:2])
                         if combo:
                             valid_combos.append(combo)
-            
+
             elif last_combo.type == ComboType.TRIPLE:
                 for cards in value_groups.values():
                     if len(cards) >= 3 and cards[0].value > last_combo.lead_value:
                         combo = identify_combo(cards[:3])
                         if combo:
                             valid_combos.append(combo)
-            
+
             elif last_combo.type == ComboType.STRAIGHT:
                 straights = self._find_straights(len(last_combo.cards))
                 for combo in straights:
                     if combo.can_beat(last_combo):
                         valid_combos.append(combo)
-            
+
             elif last_combo.type in [ComboType.PLANE, ComboType.PLANE_WITH_SINGLES, ComboType.PLANE_WITH_PAIRS]:
                 planes = self._find_planes()
                 for combo in planes:
                     if combo.can_beat(last_combo):
                         valid_combos.append(combo)
-            
+
             # Always check for bombs
             for cards in value_groups.values():
                 if len(cards) == 4:
                     bomb = identify_combo(cards)
                     if bomb and bomb.can_beat(last_combo):
                         valid_combos.append(bomb)
-        
+
         return valid_combos
-    
+
     def _find_straights(self, target_length=None):
         straights = []
         values = sorted(set(card.value for card in self.hand if card.value <= 14))  # No 2s
-        
+
         min_length = target_length if target_length else 5
-        
+
         for start_idx in range(len(values)):
             for end_idx in range(start_idx + min_length - 1, len(values)):
                 # Check if consecutive
                 is_consecutive = True
                 for i in range(start_idx + 1, end_idx + 1):
-                    if values[i] != values[i-1] + 1:
+                    if values[i] != values[i - 1] + 1:
                         is_consecutive = False
                         break
-                
+
                 if is_consecutive:
                     length = end_idx - start_idx + 1
                     if target_length is None or length == target_length:
                         # Get cards for this straight
                         straight_cards = []
-                        for val in values[start_idx:end_idx+1]:
+                        for val in values[start_idx : end_idx + 1]:
                             for card in self.hand:
                                 if card.value == val and card not in straight_cards:
                                     straight_cards.append(card)
                                     break
-                        
+
                         if len(straight_cards) == length:
                             combo = identify_combo(straight_cards)
                             if combo:
                                 straights.append(combo)
-        
+
         return straights
-    
+
     def _find_planes(self):
         planes = []
         value_groups = defaultdict(list)
         for card in self.hand:
             value_groups[card.value].append(card)
-        
+
         # Find all triples
         triple_values = []
         for value, cards in value_groups.items():
             if len(cards) >= 3 and value <= 14:  # No 2s in planes
                 triple_values.append(value)
-        
+
         if len(triple_values) < 2:
             return planes
-        
+
         triple_values.sort()
-        
+
         # Find consecutive triples
         for start_idx in range(len(triple_values)):
             consecutive = [triple_values[start_idx]]
-            
+
             for i in range(start_idx + 1, len(triple_values)):
                 if triple_values[i] == consecutive[-1] + 1:
                     consecutive.append(triple_values[i])
                 else:
                     break
-            
+
             if len(consecutive) >= 2:
                 # We have consecutive triples, try different combinations
                 for length in range(2, len(consecutive) + 1):
@@ -438,18 +458,18 @@ class AIPlayer(Player):
                     for val in consecutive[:length]:
                         for card in value_groups[val][:3]:
                             plane_base.append(card)
-                    
+
                     # Try pure plane
                     combo = identify_combo(plane_base)
                     if combo:
                         planes.append(combo)
-                    
+
                     # Try with singles
                     available_singles = []
                     for card in self.hand:
                         if card not in plane_base:
                             available_singles.append(card)
-                    
+
                     if len(available_singles) >= length:
                         # Try different combinations of singles
                         for singles in itertools.combinations(available_singles, length):
@@ -457,18 +477,18 @@ class AIPlayer(Player):
                             combo = identify_combo(test_cards)
                             if combo and combo.type == ComboType.PLANE_WITH_SINGLES:
                                 planes.append(combo)
-                    
+
                     # Try with pairs
                     available_for_pairs = defaultdict(list)
                     for card in self.hand:
                         if card not in plane_base:
                             available_for_pairs[card.value].append(card)
-                    
+
                     pairs = []
                     for value, cards in available_for_pairs.items():
                         if len(cards) >= 2:
                             pairs.append(cards[:2])
-                    
+
                     if len(pairs) >= length:
                         # Try different combinations of pairs
                         for pair_combo in itertools.combinations(pairs, length):
@@ -478,46 +498,46 @@ class AIPlayer(Player):
                             combo = identify_combo(test_cards)
                             if combo and combo.type == ComboType.PLANE_WITH_PAIRS:
                                 planes.append(combo)
-        
+
         return planes
-    
+
     def choose_play(self, last_combo, game_state):
         valid_plays = self.find_valid_plays(last_combo)
-        
+
         if not valid_plays:
             return None  # Pass
-        
+
         # Simple AI strategy
         # If starting a new round, play smaller combos first
         if last_combo is None:
             # Prefer singles and pairs to get rid of small cards
             singles = [c for c in valid_plays if c.type == ComboType.SINGLE]
             pairs = [c for c in valid_plays if c.type == ComboType.PAIR]
-            
+
             if len(self.hand) > 10 and singles:
                 # Play smallest single
                 return min(singles, key=lambda c: c.lead_value)
             elif pairs:
                 # Play smallest pair
                 return min(pairs, key=lambda c: c.lead_value)
-        
+
         # If we have few cards left, try to finish
         if len(self.hand) <= 3:
             # Play anything we can
             return valid_plays[0]
-        
+
         # Otherwise, play the weakest combo that beats the last one
         valid_plays.sort(key=lambda c: (c.type.value, c.lead_value))
-        
+
         # Don't waste bombs early
         non_bombs = [c for c in valid_plays if c.type != ComboType.BOMB]
         if non_bombs:
             return non_bombs[0]
-        
+
         # If only bombs available and we have many cards, consider passing
         if len(self.hand) > 10:
             return None
-        
+
         return valid_plays[0]
 
 class SmartAIPlayer(AIPlayer):
@@ -942,185 +962,187 @@ class Game:
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, 24)
         self.big_font = pygame.font.Font(None, 36)
-        
+
         self.player = Player("Player")
         self.ai = SmartAIPlayer("AI")
         self.current_player = None
         self.last_combo = None
         self.last_player = None
         self.selected_cards = []
-        
-        self.play_button = pygame.Rect(WINDOW_WIDTH//2 - 120, WINDOW_HEIGHT - 80, 100, 40)
-        self.pass_button = pygame.Rect(WINDOW_WIDTH//2 + 20, WINDOW_HEIGHT - 80, 100, 40)
-        
+
+        self.play_button = pygame.Rect(WINDOW_WIDTH // 2 - 120, WINDOW_HEIGHT - 80, 100, 40)
+        self.pass_button = pygame.Rect(WINDOW_WIDTH // 2 + 20, WINDOW_HEIGHT - 80, 100, 40)
+
         self.game_over = False
         self.winner = None
         self.player_card_rects = []  # Store card positions for better click detection
-        
+
         self.init_game()
-    
+
     def init_game(self):
         # Create deck
         deck = []
         for suit in Suit:
             for rank in Card.VALUE_MAP.keys():
                 deck.append(Card(rank, suit))
-        
+
         # Shuffle and deal
         random.shuffle(deck)
-        
+
         # Discard first 8 cards
         deck = deck[8:]
-        
+
         # Deal remaining 44 cards
         self.player.hand = deck[:22]
         self.ai.hand = deck[22:]
-        
+
         self.player.sort_hand()
         self.ai.sort_hand()
-        
+
         # Player with 3♦ starts
         self.current_player = self.player
         for card in self.player.hand:
-            if card.rank == '3' and card.suit == Suit.DIAMONDS:
+            if card.rank == "3" and card.suit == Suit.DIAMONDS:
                 self.current_player = self.player
                 break
         else:
             for card in self.ai.hand:
-                if card.rank == '3' and card.suit == Suit.DIAMONDS:
+                if card.rank == "3" and card.suit == Suit.DIAMONDS:
                     self.current_player = self.ai
                     break
-    
+
     def draw_card(self, card, x, y, show_face=True):
         # Draw card background
         if show_face:
             pygame.draw.rect(self.screen, CARD_COLOR, (x, y, CARD_WIDTH, CARD_HEIGHT))
             pygame.draw.rect(self.screen, TEXT_COLOR, (x, y, CARD_WIDTH, CARD_HEIGHT), 2)
-            
+
             # Draw rank
             color = RED_COLOR if card.suit in [Suit.HEARTS, Suit.DIAMONDS] else BLACK_COLOR
             rank_text = self.font.render(card.rank, True, color)
             self.screen.blit(rank_text, (x + 5, y + 5))
-            
+
             # Draw suit
             suit_text = self.font.render(card.suit.value, True, color)
             self.screen.blit(suit_text, (x + 5, y + 25))
-            
+
             # Highlight if selected
             if card.selected:
                 pygame.draw.rect(self.screen, SELECTED_COLOR, (x, y, CARD_WIDTH, CARD_HEIGHT), 4)
         else:
             pygame.draw.rect(self.screen, CARD_BACK_COLOR, (x, y, CARD_WIDTH, CARD_HEIGHT))
             pygame.draw.rect(self.screen, TEXT_COLOR, (x, y, CARD_WIDTH, CARD_HEIGHT), 2)
-    
+
     def draw_hand(self, player, y_pos, show_cards=True):
         if not player.hand:
             return
-            
+
         # Calculate card spacing - overlap cards if needed
         total_width = WINDOW_WIDTH - 100  # Leave margins
         max_card_spacing = 50  # Maximum spacing between cards
-        
+
         if len(player.hand) * CARD_WIDTH <= total_width:
             # Cards fit without overlap
             card_spacing = CARD_WIDTH + 5
         else:
             # Need to overlap cards
             card_spacing = min(max_card_spacing, (total_width - CARD_WIDTH) // (len(player.hand) - 1))
-        
+
         total_hand_width = CARD_WIDTH + (len(player.hand) - 1) * card_spacing
         start_x = (WINDOW_WIDTH - total_hand_width) // 2
-        
+
         # Store card positions for click detection
         if player == self.player:
             self.player_card_rects = []
-        
+
         for i, card in enumerate(player.hand):
             x = start_x + i * card_spacing
             y = y_pos - 30 if show_cards and card.selected else y_pos
             self.draw_card(card, x, y, show_cards)
-            
+
             # Store rect for click detection (for player only)
             if player == self.player:
                 self.player_card_rects.append((card, pygame.Rect(x, y, CARD_WIDTH, CARD_HEIGHT)))
-    
+
     def draw_button(self, rect, text, hover=False):
         color = BUTTON_HOVER if hover else BUTTON_COLOR
         pygame.draw.rect(self.screen, color, rect)
         pygame.draw.rect(self.screen, TEXT_COLOR, rect, 2)
-        
+
         text_surf = self.font.render(text, True, CARD_COLOR)
         text_rect = text_surf.get_rect(center=rect.center)
         self.screen.blit(text_surf, text_rect)
-    
+
     def draw_game_info(self):
         # Draw HP
         player_hp_text = self.font.render(f"Player HP: {self.player.hp}", True, CARD_COLOR)
         ai_hp_text = self.font.render(f"AI HP: {self.ai.hp}", True, CARD_COLOR)
         self.screen.blit(player_hp_text, (20, WINDOW_HEIGHT - 30))
         self.screen.blit(ai_hp_text, (20, 20))
-        
+
         # Draw turn indicator
         turn_text = self.font.render(f"Current Turn: {self.current_player.name}", True, CARD_COLOR)
-        self.screen.blit(turn_text, (WINDOW_WIDTH//2 - 80, 20))
-        
+        self.screen.blit(turn_text, (WINDOW_WIDTH // 2 - 80, 20))
+
         # Draw last played combo
         if self.last_combo and self.last_player:
-            combo_text = self.font.render(f"Last Play: {self.last_player.name} - {self.last_combo.type.name}", True, CARD_COLOR)
-            self.screen.blit(combo_text, (WINDOW_WIDTH//2 - 100, WINDOW_HEIGHT//2))
-            
+            combo_text = self.font.render(
+                f"Last Play: {self.last_player.name} - {self.last_combo.type.name}", True, CARD_COLOR
+            )
+            self.screen.blit(combo_text, (WINDOW_WIDTH // 2 - 100, WINDOW_HEIGHT // 2))
+
             # Draw last played cards
             start_x = (WINDOW_WIDTH - 40 * len(self.last_combo.cards)) // 2
             for i, card in enumerate(self.last_combo.cards):
-                self.draw_card(card, start_x + i * 40, WINDOW_HEIGHT//2 + 30, True)
-    
+                self.draw_card(card, start_x + i * 40, WINDOW_HEIGHT // 2 + 30, True)
+
     def handle_card_click(self, mouse_pos):
         if self.current_player != self.player or self.game_over:
             return
-        
+
         # Check clicks from right to left (top cards first due to overlap)
         for card, rect in reversed(self.player_card_rects):
             if rect.collidepoint(mouse_pos):
                 card.selected = not card.selected
                 break
-    
+
     def get_selected_cards(self):
         return [card for card in self.player.hand if card.selected]
-    
+
     def play_cards(self, player, cards):
         if not cards:
             return False
-        
+
         combo = identify_combo(cards)
         if not combo:
             return False
-        
+
         if self.last_combo and self.last_player != player:
             if not combo.can_beat(self.last_combo):
                 return False
-        
+
         # Valid play
         player.remove_cards(cards)
         self.last_combo = combo
         self.last_player = player
-        
+
         # Clear selections
         for card in self.player.hand:
             card.selected = False
-        
+
         return True
-    
+
     def pass_turn(self):
         if self.last_player != self.current_player:
             self.current_player.hp -= 1
-        
+
         # Switch turns
         self.current_player = self.ai if self.current_player == self.player else self.player
-        
+
         # If the last player gets the turn back, clear the table
         if self.last_player == self.current_player:
             self.last_combo = None
-    
+
     def check_game_over(self):
         if len(self.player.hand) == 0:
             self.game_over = True
@@ -1134,98 +1156,102 @@ class Game:
         elif self.ai.hp <= 0:
             self.game_over = True
             self.winner = self.player
-    
+
     def ai_turn(self):
         if self.current_player != self.ai or self.game_over:
             return
-        
+
         # AI thinking delay
         pygame.time.wait(1000)
-        
+
         # AI chooses play
-        combo = self.ai.choose_play(self.last_combo, {
-            'player_cards': len(self.player.hand),
-            'ai_cards': len(self.ai.hand),
-            'player_hp': self.player.hp,
-            'ai_hp': self.ai.hp
-        })
-        
+        combo = self.ai.choose_play(
+            self.last_combo,
+            {
+                "player_cards": len(self.player.hand),
+                "ai_cards": len(self.ai.hand),
+                "player_hp": self.player.hp,
+                "ai_hp": self.ai.hp,
+            },
+        )
+
         if combo:
             self.play_cards(self.ai, combo.cards)
             self.current_player = self.player
         else:
             self.pass_turn()
-    
+
     def draw(self):
         self.screen.fill(BG_COLOR)
-        
+
         # Draw hands
         self.draw_hand(self.ai, 100, show_cards=False)  # Hide AI cards
         self.draw_hand(self.player, WINDOW_HEIGHT - 250, show_cards=True)  # Moved up to avoid button overlap
-        
+
         # Draw game info
         self.draw_game_info()
-        
+
         # Draw buttons (only for player turn)
         if self.current_player == self.player and not self.game_over:
             mouse_pos = pygame.mouse.get_pos()
             self.draw_button(self.play_button, "Play", self.play_button.collidepoint(mouse_pos))
             self.draw_button(self.pass_button, "Pass", self.pass_button.collidepoint(mouse_pos))
-        
+
         # Draw game over
         if self.game_over:
             winner_text = self.big_font.render(f"{self.winner.name} Wins!", True, CARD_COLOR)
-            text_rect = winner_text.get_rect(center=(WINDOW_WIDTH//2, WINDOW_HEIGHT//2 - 100))
+            text_rect = winner_text.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 100))
             self.screen.blit(winner_text, text_rect)
-        
+
         # Card count
         player_count = self.font.render(f"Cards: {len(self.player.hand)}", True, CARD_COLOR)
         ai_count = self.font.render(f"Cards: {len(self.ai.hand)}", True, CARD_COLOR)
         self.screen.blit(player_count, (20, WINDOW_HEIGHT - 50))
         self.screen.blit(ai_count, (20, 50))
-    
+
     def run(self):
         running = True
-        
+
         while running:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                
+
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:  # Left click
                         mouse_pos = pygame.mouse.get_pos()
-                        
+
                         # Check card clicks
                         self.handle_card_click(mouse_pos)
-                        
+
                         # Check button clicks
                         if self.current_player == self.player and not self.game_over:
                             if self.play_button.collidepoint(mouse_pos):
                                 selected = self.get_selected_cards()
                                 if self.play_cards(self.player, selected):
                                     self.current_player = self.ai
-                            
+
                             elif self.pass_button.collidepoint(mouse_pos):
                                 self.pass_turn()
-            
+
             # AI turn
             self.ai_turn()
-            
+
             # Check game over
             self.check_game_over()
-            
+
             # Draw everything
             self.draw()
             pygame.display.flip()
             self.clock.tick(FPS)
-        
+
         pygame.quit()
+
 
 # Main
 if __name__ == "__main__":
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
     pygame.display.set_caption("跑得快 (Run Fast)")
-    
+
     game = Game(screen)
     game.run()
