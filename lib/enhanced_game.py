@@ -97,15 +97,20 @@ class EnhancedFightGame:
             # Use pre-dealt hand from preview
             self.player.hand = self.preview_player.hand
             # Deal AI hand from remaining deck
-            self.ai.hand = self.preview_deck[22:]
+            self.ai.hand = self.preview_deck[23:]
             # Set discard pile (first 8 cards were already discarded during preview)
             self.discard_pile = []
         else:
             # Create deck normally
             deck = []
-            for suit in Suit:
-                for rank in Card.VALUE_MAP.keys():
+            # Regular cards
+            for suit in [Suit.SPADES, Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS]:
+                for rank in ["3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A", "2"]:
                     deck.append(Card(rank, suit))
+            
+            # Add Jokers
+            deck.append(Card("Black Joker", Suit.BLACK_JOKER))
+            deck.append(Card("Red Joker", Suit.RED_JOKER))
 
             # Shuffle and deal
             random.shuffle(deck)
@@ -114,9 +119,9 @@ class EnhancedFightGame:
             self.discard_pile = deck[:8]
             deck = deck[8:]
 
-            # Deal remaining 44 cards
-            self.player.hand = deck[:22]
-            self.ai.hand = deck[22:]
+            # Deal remaining 46 cards (23 each)
+            self.player.hand = deck[:23]
+            self.ai.hand = deck[23:]
 
         self.player.sort_hand()
         self.ai.sort_hand()

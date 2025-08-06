@@ -143,6 +143,8 @@ class Suit(Enum):
     HEARTS = "♥"
     DIAMONDS = "♦"
     CLUBS = "♣"
+    RED_JOKER = "🃏"
+    BLACK_JOKER = "🂿"
 
 
 class Card:
@@ -160,6 +162,8 @@ class Card:
         "K": 13,
         "A": 14,
         "2": 15,
+        "Black Joker": 16,
+        "Red Joker": 17,
     }
 
     def __init__(self, rank, suit):

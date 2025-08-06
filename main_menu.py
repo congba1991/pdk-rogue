@@ -521,9 +521,14 @@ class MainMenu:
         """Create and deal cards for preview"""
         # Create deck
         deck = []
-        for suit in Suit:
-            for rank in Card.VALUE_MAP.keys():
+        # Regular cards
+        for suit in [Suit.SPADES, Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS]:
+            for rank in ["3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A", "2"]:
                 deck.append(Card(rank, suit))
+        
+        # Add Jokers
+        deck.append(Card("Black Joker", Suit.BLACK_JOKER))
+        deck.append(Card("Red Joker", Suit.RED_JOKER))
 
         # Shuffle and deal
         random.shuffle(deck)
@@ -532,9 +537,9 @@ class MainMenu:
         discard_pile = deck[:8]
         deck = deck[8:]
 
-        # Create preview player and deal 22 cards
+        # Create preview player and deal 23 cards
         self.preview_player = FightPlayer("Player")
-        self.preview_player.hand = deck[:22]
+        self.preview_player.hand = deck[:23]
         self.preview_player.sort_hand()
         
         # Store remaining deck for actual fight

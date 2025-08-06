@@ -15,6 +15,7 @@ class ComboType(Enum):
     PLANE_WITH_SINGLES = 10
     PLANE_WITH_PAIRS = 11
     BOMB = 12
+    JOKER_BOMB = 13
 
 
 class Combo:
@@ -53,14 +54,25 @@ class Combo:
             return max(triple_values) if triple_values else 0
         elif self.type == ComboType.BOMB:
             return self.cards[0].value
+        elif self.type == ComboType.JOKER_BOMB:
+            return 18  # Joker Bomb has highest value
         return 0
 
     def can_beat(self, other):
         # ...existing code...
         if other is None:
             return True
+        # Joker Bomb beats everything
+        if self.type == ComboType.JOKER_BOMB:
+            return True
+        
+        # Nothing beats Joker Bomb except another Joker Bomb
+        if other.type == ComboType.JOKER_BOMB:
+            return False
+            
+        # Regular Bomb logic
         if self.type == ComboType.BOMB:
-            if other.type != ComboType.BOMB:
+            if other.type not in [ComboType.BOMB, ComboType.JOKER_BOMB]:
                 return True
             return self.lead_value > other.lead_value
         if other.type == ComboType.BOMB:
@@ -110,6 +122,15 @@ def identify_combo(cards):
         return Combo(cards, ComboType.TRIPLE)
     if n == 4 and len(value_counts) == 1:
         return Combo(cards, ComboType.BOMB)
+    
+    # Check for Joker Bomb (Red Joker + Black Joker)
+    if n == 2:
+        joker_values = set()
+        for card in cards:
+            if card.rank in ["Red Joker", "Black Joker"]:
+                joker_values.add(card.rank)
+        if len(joker_values) == 2:  # Has both Red and Black Joker
+            return Combo(cards, ComboType.JOKER_BOMB)
 
     # Pair straight (consecutive pairs, at least 3 pairs, no 2s)
     if n >= 6 and n % 2 == 0:

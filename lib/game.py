@@ -49,9 +49,14 @@ class FightGame:
     def init_game(self):
         # Create deck
         deck = []
-        for suit in Suit:
-            for rank in Card.VALUE_MAP.keys():
+        # Regular cards
+        for suit in [Suit.SPADES, Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS]:
+            for rank in ["3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A", "2"]:
                 deck.append(Card(rank, suit))
+        
+        # Add Jokers
+        deck.append(Card("Black Joker", Suit.BLACK_JOKER))
+        deck.append(Card("Red Joker", Suit.RED_JOKER))
 
         # Shuffle and deal
         random.shuffle(deck)
@@ -59,9 +64,9 @@ class FightGame:
         # Discard first 8 cards
         deck = deck[8:]
 
-        # Deal remaining 44 cards
-        self.player.hand = deck[:22]
-        self.ai.hand = deck[22:]
+        # Deal remaining 46 cards (23 each)
+        self.player.hand = deck[:23]
+        self.ai.hand = deck[23:]
 
         self.player.sort_hand()
         self.ai.sort_hand()
