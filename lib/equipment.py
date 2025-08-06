@@ -53,12 +53,16 @@ class SturdyBoots(Equipment):
     
     def on_equip(self, game_state: Any) -> bool:
         # Add 1 to current HP (since there's no max_hp concept in FightPlayer)
-        game_state.player.hp += 1
+        # Only applies during actual combat, not during run setup
+        if hasattr(game_state, 'player') and hasattr(game_state.player, 'hp'):
+            game_state.player.hp += 1
         return True
     
     def on_unequip(self, game_state: Any) -> bool:
         # Reduce HP by 1, but don't go below 1
-        game_state.player.hp = max(1, game_state.player.hp - 1)
+        # Only applies during actual combat, not during run setup
+        if hasattr(game_state, 'player') and hasattr(game_state.player, 'hp'):
+            game_state.player.hp = max(1, game_state.player.hp - 1)
         return True
 
 
@@ -81,6 +85,7 @@ class QuickFingers(Equipment):
     def can_steal_card(self, game_state: Any) -> bool:
         """Check if we can steal a card this fight"""
         return (not self.used_this_fight and 
+                hasattr(game_state, 'ai') and hasattr(game_state.ai, 'hand') and
                 len(game_state.ai.hand) > 0)
     
     def steal_card(self, game_state: Any) -> bool:
@@ -88,6 +93,9 @@ class QuickFingers(Equipment):
         if not self.can_steal_card(game_state):
             return False
         
+        if not (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand')):
+            return False
+            
         import random
         stolen_card = random.choice(game_state.ai.hand)
         
@@ -98,7 +106,8 @@ class QuickFingers(Equipment):
         game_state.ai.hand.remove(stolen_card)
         
         # Resort the player's hand
-        game_state.resort_hand(game_state.player)
+        if hasattr(game_state, 'resort_hand'):
+            game_state.resort_hand(game_state.player)
         
         self.used_this_fight = True
         return True
@@ -142,11 +151,12 @@ class SharpMind(Equipment):
     
     def on_fight_start(self, game_state: Any) -> bool:
         # Show 4 cards from discard pile (or all if less than 4)
-        cards_to_show = min(4, len(game_state.discard_pile))
-        if cards_to_show > 0:
-            shown_cards = game_state.discard_pile[:cards_to_show]
-            # In a real implementation, this would show a UI
-            print(f"Sharp Mind reveals: {[str(card) for card in shown_cards]}")
+        if hasattr(game_state, 'discard_pile'):
+            cards_to_show = min(4, len(game_state.discard_pile))
+            if cards_to_show > 0:
+                shown_cards = game_state.discard_pile[:cards_to_show]
+                # In a real implementation, this would show a UI
+                print(f"Sharp Mind reveals: {[str(card) for card in shown_cards]}")
         return True
 
 
@@ -175,6 +185,10 @@ class GamblersDice(Equipment):
         if not self.can_use(game_state):
             return False
         
+        if not (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand') and 
+                hasattr(game_state, 'discard_pile')):
+            return False
+        
         # Return current hand to discard pile
         hand_size = len(game_state.player.hand)
         game_state.discard_pile.extend(game_state.player.hand)
@@ -194,7 +208,8 @@ class GamblersDice(Equipment):
                 game_state.discard_pile.remove(card)
         
         # Resort the player's hand
-        game_state.resort_hand(game_state.player)
+        if hasattr(game_state, 'resort_hand'):
+            game_state.resort_hand(game_state.player)
         
         self.used_this_fight = True
         return True

@@ -8,6 +8,7 @@ from lib.card import Card, Suit
 from lib.player import FightPlayer
 from lib.skill_cards import get_random_skill_cards, get_skill_card, load_skill_card_image
 from lib.equipment import get_all_equipment, get_equipment
+from lib.map_system import MapGenerator, MapRenderer, RegionMap, NodeType
 import random
 
 
@@ -20,7 +21,7 @@ class MainMenu:
         self.profile_manager = ProfileManager()
         
         # Menu states
-        self.state = "main"  # "main", "profile_select", "create_profile", "region_select", "equipment_select", "pre_fight", "reward_select"
+        self.state = "main"  # "main", "profile_select", "create_profile", "region_select", "equipment_select", "map_view", "pre_fight", "reward_select"
         self.current_profile = None
         self.selected_profile = None
         self.selected_region = None
@@ -66,6 +67,10 @@ class MainMenu:
         self.equipment_buttons = []
         self.selected_equipment = []
         self.confirm_equipment_button = pygame.Rect(center_x, WINDOW_HEIGHT - 80, button_width, button_height)
+        
+        # Map system
+        self.current_map = None
+        self.map_renderer = MapRenderer()
         
     def draw_button(self, rect, text, hover=False, disabled=False):
         """Draw a button with hover effects"""
@@ -517,6 +522,43 @@ class MainMenu:
         # Back button
         self.draw_button(self.back_button, "Back", self.back_button.collidepoint(mouse_pos))
         
+    def draw_map_view(self):
+        """Draw the roguelike map with node navigation"""
+        if not self.current_map:
+            return
+            
+        # Draw map using renderer
+        self.map_renderer.draw_map(self.screen, self.current_map)
+        
+        # Draw status info
+        status_font = pygame.font.Font(None, 24)
+        
+        # Draw current node info if any
+        if self.current_map.current_node:
+            node = self.current_map.current_node
+            node_info = f"Current: {node.node_type.value.title()} Node"
+        else:
+            node_info = "Select a starting node"
+            
+        info_surface = status_font.render(node_info, True, TEXT_COLOR)
+        self.screen.blit(info_surface, (20, WINDOW_HEIGHT - 100))
+        
+        # Draw run info
+        run_info = f"Life Points: {self.run_manager.run_state.life_points}"
+        run_surface = status_font.render(run_info, True, TEXT_COLOR)
+        self.screen.blit(run_surface, (20, WINDOW_HEIGHT - 75))
+        
+        # Draw available nodes info
+        available_nodes = self.current_map.get_available_next_nodes()
+        if available_nodes:
+            avail_text = f"Available nodes: {len(available_nodes)}"
+            avail_surface = status_font.render(avail_text, True, TEXT_COLOR)
+            self.screen.blit(avail_surface, (20, WINDOW_HEIGHT - 50))
+        
+        # Back button
+        mouse_pos = pygame.mouse.get_pos()
+        self.draw_button(self.back_button, "Back", self.back_button.collidepoint(mouse_pos))
+        
     def create_preview_deck(self):
         """Create and deal cards for preview"""
         # Create deck
@@ -556,9 +598,12 @@ class MainMenu:
         
         self.run_manager.start_run()
         
-        # Create preview deck and go to pre-fight screen
-        self.create_preview_deck()
-        self.state = "pre_fight"
+        # Generate map for this run
+        map_generator = MapGenerator()
+        self.current_map = map_generator.generate_region_map(region_name)
+        
+        # Go to map view
+        self.state = "map_view"
         
     def check_run_status_and_continue(self):
         """Check run status and continue to next fight or end run"""
@@ -577,10 +622,13 @@ class MainMenu:
             print(f"Run failed! LP reached 0. Final score: {self.run_manager.run_state.fights_won} fights won")
             self.state = "region_select"
             return
+        
+        # Complete current node and return to map
+        if self.current_map and self.current_map.current_node:
+            self.current_map.complete_current_node()
             
-        # Create new preview deck and go to pre-fight screen
-        self.create_preview_deck()
-        self.state = "pre_fight"
+        # Return to map view
+        self.state = "map_view"
         
     def start_actual_fight(self):
         """Start the actual combat"""
@@ -703,8 +751,39 @@ class MainMenu:
             elif self.give_up_button.collidepoint(pos):
                 self.give_up_fight()
             elif self.back_button.collidepoint(pos):
-                self.state = "region_select"
+                self.state = "map_view"
                 
+        elif self.state == "map_view":
+            if self.back_button.collidepoint(pos):
+                self.state = "region_select"
+                return
+                
+            # Check for node clicks
+            if self.current_map:
+                clicked_node = self.map_renderer.get_clicked_node(self.current_map, pos)
+                if clicked_node:
+                    available_nodes = self.current_map.get_available_next_nodes()
+                    
+                    # If no current node, can click start node
+                    if not self.current_map.current_node and clicked_node == self.current_map.start_node:
+                        self.current_map.move_to_node(clicked_node)
+                        return
+                    
+                    # If clicked node is available, move to it
+                    elif clicked_node in available_nodes:
+                        self.current_map.move_to_node(clicked_node)
+                        
+                        # Enter the selected node
+                        if clicked_node.node_type == NodeType.COMBAT:
+                            # Create preview deck and go to pre-fight screen
+                            self.create_preview_deck()
+                            self.state = "pre_fight"
+                        # TODO: Handle other node types (elite, exchange, mystery, boss)
+                        else:
+                            # For now, just mark as completed and stay on map
+                            self.current_map.complete_current_node()
+                        return
+                        
         elif self.state == "reward_select":
             # Check reward card clicks
             for card, button_rect in self.reward_buttons:
@@ -757,6 +836,8 @@ class MainMenu:
             self.draw_region_select()
         elif self.state == "equipment_select":
             self.draw_equipment_select()
+        elif self.state == "map_view":
+            self.draw_map_view()
         elif self.state == "pre_fight":
             self.draw_pre_fight()
         elif self.state == "reward_select":
