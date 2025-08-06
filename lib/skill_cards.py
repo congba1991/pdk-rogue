@@ -35,10 +35,13 @@ class DiscardGrab(SkillCard):
     
     def can_use(self, game_state: Any) -> bool:
         # Check if discard pile has at least 2 cards
-        return len(game_state.discard_pile) >= 2
+        return hasattr(game_state, 'discard_pile') and len(game_state.discard_pile) >= 2
     
     def use(self, game_state: Any) -> bool:
         if not self.can_use(game_state):
+            return False
+        
+        if not (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand')):
             return False
         
         # Take 2 random cards from discard pile
@@ -85,10 +88,13 @@ class CardSteal(SkillCard):
         )
     
     def can_use(self, game_state: Any) -> bool:
-        return len(game_state.ai.hand) > 0
+        return hasattr(game_state, 'ai') and hasattr(game_state.ai, 'hand') and len(game_state.ai.hand) > 0
     
     def use(self, game_state: Any) -> bool:
         if not self.can_use(game_state):
+            return False
+        
+        if not (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand')):
             return False
         
         # Take 1 random card from opponent
@@ -133,10 +139,13 @@ class HandRefresh(SkillCard):
         )
     
     def can_use(self, game_state: Any) -> bool:
-        # Can always use (even if no cards to draw)
-        return True
+        # Can use if we're in a proper game state (has discard pile)
+        return hasattr(game_state, 'discard_pile')
     
     def use(self, game_state: Any) -> bool:
+        if not (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand')):
+            return False
+        
         # Draw up to 3 cards from discard pile (simulating deck)
         import random
         cards_to_draw = min(3, len(game_state.discard_pile))
@@ -177,6 +186,9 @@ class CardSort(SkillCard):
         )
     
     def use(self, game_state: Any) -> bool:
+        if not (hasattr(game_state, 'player') and hasattr(game_state.player, 'sort_hand')):
+            return False
+        
         # Resort the hand
         game_state.player.sort_hand()
         return True
@@ -235,4 +247,26 @@ def get_random_skill_cards(count: int = 3, exclude: List[str] = None) -> List[Sk
         count = len(available_cards)
     
     selected_names = random.sample(available_cards, count)
-    return [get_skill_card(name) for name in selected_names] 
+    return [get_skill_card(name) for name in selected_names]
+
+
+def get_skill_card_image_path(card_name: str) -> str:
+    """Get the file path for a skill card image"""
+    import os
+    filename = card_name.lower().replace(" ", "_").replace("'", "") + ".png"
+    return os.path.join("images/skill_cards", filename)
+
+
+def load_skill_card_image(card_name: str):
+    """Load a skill card image, return None if not found"""
+    try:
+        import pygame
+        import os
+        image_path = get_skill_card_image_path(card_name)
+        if os.path.exists(image_path):
+            return pygame.image.load(image_path)
+        else:
+            # Return a placeholder if image doesn't exist
+            return None
+    except:
+        return None 

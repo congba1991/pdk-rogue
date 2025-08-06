@@ -4,7 +4,7 @@ from lib.constants import *
 from lib.card import Card, Suit
 from lib.combo import identify_combo
 from lib.player import FightPlayer, SmartAIPlayer
-from lib.skill_cards import get_skill_card, SkillCard
+from lib.skill_cards import get_skill_card, SkillCard, load_skill_card_image
 from lib.items import get_item, Item
 from lib.equipment import get_equipment, Equipment
 from typing import List, Optional, Dict, Any
@@ -212,7 +212,7 @@ class EnhancedFightGame:
         self.screen.blit(text_surface, text_rect)
 
     def draw_skill_cards(self):
-        """Draw skill card buttons"""
+        """Draw skill card images"""
         if not self.player_skill_cards:
             return
             
@@ -221,16 +221,62 @@ class EnhancedFightGame:
         self.screen.blit(skill_title, (WINDOW_WIDTH - 200, 100))
         
         self.skill_card_buttons = []
+        mouse_pos = pygame.mouse.get_pos()
+        
+        # Arrange skill cards in a grid (2 columns)
+        cards_per_row = 2
+        card_width = 80
+        card_height = 100
+        card_spacing = 5
+        start_x = WINDOW_WIDTH - 200
+        start_y = 130
+        
         for i, skill_card in enumerate(self.player_skill_cards):
-            y_pos = 130 + i * 30
-            button_rect = pygame.Rect(WINDOW_WIDTH - 200, y_pos, 180, 25)
-            self.skill_card_buttons.append((skill_card, button_rect))
+            row = i // cards_per_row
+            col = i % cards_per_row
+            
+            x = start_x + col * (card_width + card_spacing)
+            y = start_y + row * (card_height + card_spacing)
+            
+            card_rect = pygame.Rect(x, y, card_width, card_height)
+            self.skill_card_buttons.append((skill_card, card_rect))
             
             # Check if skill card can be used
             can_use = skill_card.can_use(self)
-            hover = button_rect.collidepoint(pygame.mouse.get_pos())
+            hover = card_rect.collidepoint(mouse_pos)
             
-            self.draw_button(button_rect, skill_card.name, hover, not can_use)
+            # Try to load and display card image
+            card_image = load_skill_card_image(skill_card.name)
+            if card_image:
+                # Scale image to fit card size if needed
+                if card_image.get_width() != card_width or card_image.get_height() != card_height:
+                    card_image = pygame.transform.scale(card_image, (card_width, card_height))
+                
+                # Apply effects based on state
+                if not can_use:
+                    # Gray out unusable cards
+                    overlay = pygame.Surface((card_width, card_height))
+                    overlay.fill((100, 100, 100))
+                    overlay.set_alpha(128)
+                    card_image = card_image.copy()
+                    card_image.blit(overlay, (0, 0))
+                elif hover:
+                    # Slight highlight on hover
+                    overlay = pygame.Surface((card_width, card_height))
+                    overlay.fill((255, 255, 255))
+                    overlay.set_alpha(50)
+                    card_image = card_image.copy()
+                    card_image.blit(overlay, (0, 0))
+                
+                self.screen.blit(card_image, card_rect)
+                
+                # Draw border around card
+                border_color = SELECTED_COLOR if hover and can_use else TEXT_COLOR
+                border_width = 2 if hover and can_use else 1
+                pygame.draw.rect(self.screen, border_color, card_rect, border_width)
+            else:
+                # Fallback to text button if image not found
+                self.draw_button(card_rect, skill_card.name[:8], hover, not can_use)
 
     def draw_items(self):
         """Draw item buttons"""

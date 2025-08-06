@@ -6,7 +6,7 @@ from lib.run_system import RunManager
 from lib.enhanced_game import EnhancedFightGame
 from lib.card import Card, Suit
 from lib.player import FightPlayer
-from lib.skill_cards import get_random_skill_cards, get_skill_card
+from lib.skill_cards import get_random_skill_cards, get_skill_card, load_skill_card_image
 from lib.equipment import get_all_equipment, get_equipment
 import random
 
@@ -340,29 +340,80 @@ class MainMenu:
                 card_surface = self.small_font.render(card_text, True, TEXT_COLOR)
                 self.screen.blit(card_surface, (30, y_pos))
         
-        # Draw reward cards
+        # Draw reward cards as images in a horizontal layout
         self.reward_buttons = []
         mouse_pos = pygame.mouse.get_pos()
         
+        card_width = 120
+        card_height = 150
+        card_spacing = 20
+        
+        # Center the cards horizontally
+        total_width = len(self.reward_cards) * card_width + (len(self.reward_cards) - 1) * card_spacing
+        start_x = (WINDOW_WIDTH - total_width) // 2
+        start_y = 280
+        
         for i, card in enumerate(self.reward_cards):
-            y_pos = 300 + i * 80
-            button_rect = pygame.Rect(100, y_pos, WINDOW_WIDTH - 200, 70)
-            self.reward_buttons.append((card, button_rect))
+            x = start_x + i * (card_width + card_spacing)
+            y = start_y
             
-            hover = button_rect.collidepoint(mouse_pos)
-            # Check if inventory is full
+            card_rect = pygame.Rect(x, y, card_width, card_height)
+            self.reward_buttons.append((card, card_rect))
+            
+            hover = card_rect.collidepoint(mouse_pos)
             can_select = self.run_manager.run_state.can_add_skill_card()
             
-            self.draw_button(button_rect, "", hover, not can_select)
-            
-            # Draw card info
-            name_surface = self.font.render(card.name, True, TEXT_COLOR)
-            desc_surface = self.small_font.render(card.description, True, TEXT_COLOR)
-            rarity_surface = self.small_font.render(f"[{card.rarity.name}]", True, TEXT_COLOR)
-            
-            self.screen.blit(name_surface, (button_rect.x + 10, button_rect.y + 5))
-            self.screen.blit(desc_surface, (button_rect.x + 10, button_rect.y + 30))
-            self.screen.blit(rarity_surface, (button_rect.x + 10, button_rect.y + 50))
+            # Try to load and display card image
+            card_image = load_skill_card_image(card.name)
+            if card_image:
+                # Scale image to reward card size
+                scaled_image = pygame.transform.scale(card_image, (card_width, card_height))
+                
+                # Apply effects based on state
+                if not can_select:
+                    # Gray out if inventory full
+                    overlay = pygame.Surface((card_width, card_height))
+                    overlay.fill((100, 100, 100))
+                    overlay.set_alpha(150)
+                    scaled_image = scaled_image.copy()
+                    scaled_image.blit(overlay, (0, 0))
+                elif hover:
+                    # Highlight on hover
+                    overlay = pygame.Surface((card_width, card_height))
+                    overlay.fill((255, 255, 255))
+                    overlay.set_alpha(60)
+                    scaled_image = scaled_image.copy()
+                    scaled_image.blit(overlay, (0, 0))
+                
+                self.screen.blit(scaled_image, card_rect)
+                
+                # Draw border
+                border_color = SELECTED_COLOR if hover and can_select else TEXT_COLOR
+                border_width = 3 if hover and can_select else 1
+                pygame.draw.rect(self.screen, border_color, card_rect, border_width)
+                
+                # Draw card name below the image
+                name_surface = self.small_font.render(card.name, True, TEXT_COLOR)
+                name_rect = name_surface.get_rect(centerx=card_rect.centerx, y=card_rect.bottom + 5)
+                self.screen.blit(name_surface, name_rect)
+                
+                # Draw description below name
+                desc_surface = self.small_font.render(card.description[:50] + "..." if len(card.description) > 50 else card.description, True, TEXT_COLOR)
+                desc_rect = desc_surface.get_rect(centerx=card_rect.centerx, y=name_rect.bottom + 3)
+                self.screen.blit(desc_surface, desc_rect)
+                
+            else:
+                # Fallback to button if image not found
+                self.draw_button(card_rect, "", hover, not can_select)
+                
+                # Draw card info as text
+                name_surface = self.font.render(card.name, True, TEXT_COLOR)
+                desc_surface = self.small_font.render(card.description, True, TEXT_COLOR)
+                rarity_surface = self.small_font.render(f"[{card.rarity.name}]", True, TEXT_COLOR)
+                
+                self.screen.blit(name_surface, (card_rect.x + 10, card_rect.y + 5))
+                self.screen.blit(desc_surface, (card_rect.x + 10, card_rect.y + 30))
+                self.screen.blit(rarity_surface, (card_rect.x + 10, card_rect.y + 50))
         
         # If inventory is full, show message and option to abandon cards
         if not self.run_manager.run_state.can_add_skill_card():
