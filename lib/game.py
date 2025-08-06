@@ -3,14 +3,14 @@ import random
 from lib.map import RogueMap
 from lib.card import Card, Suit
 from lib.combo import identify_combo
-from lib.player import RoguePlayer, FightPlayer, SmartAIPlayer
+from lib.player import FightPlayer, SmartAIPlayer
 from lib.constants import *
 
 
 class RogueGame:
     def __init__(self, screen, map: RogueMap):
         self.game_over = False
-        self.game_player = RoguePlayer("Player")
+        self.game_player = FightPlayer("Player")
         self.map = map
         self.screen = screen
 

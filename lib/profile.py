@@ -19,13 +19,7 @@ class Profile:
     achievements: Dict[str, Any] = field(default_factory=dict)
     
     def __post_init__(self):
-        # Initialize with starter content
-        if not self.unlocked_skill_cards:
-            self.unlocked_skill_cards = {"Discard Grab", "Time Warp", "Card Steal"}
-        if not self.unlocked_items:
-            self.unlocked_items = {"Lucky Charm", "Momentum Token"}
-        if not self.unlocked_equipment:
-            self.unlocked_equipment = {"Sturdy Boots", "Quick Fingers"}
+        # Initialize with minimal starter content for new players
         if not self.unlocked_regions:
             self.unlocked_regions = {"Tutorial"}
     

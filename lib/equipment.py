@@ -52,16 +52,13 @@ class SturdyBoots(Equipment):
         )
     
     def on_equip(self, game_state: Any) -> bool:
-        game_state.player.max_life_points += 1
-        game_state.player.life_points += 1
+        # Add 1 to current HP (since there's no max_hp concept in FightPlayer)
+        game_state.player.hp += 1
         return True
     
     def on_unequip(self, game_state: Any) -> bool:
-        game_state.player.max_life_points -= 1
-        game_state.player.life_points = min(
-            game_state.player.life_points,
-            game_state.player.max_life_points
-        )
+        # Reduce HP by 1, but don't go below 1
+        game_state.player.hp = max(1, game_state.player.hp - 1)
         return True
 
 
@@ -84,7 +81,7 @@ class QuickFingers(Equipment):
     def can_steal_card(self, game_state: Any) -> bool:
         """Check if we can steal a card this fight"""
         return (not self.used_this_fight and 
-                len(game_state.opponent.hand) > 0)
+                len(game_state.ai.hand) > 0)
     
     def steal_card(self, game_state: Any) -> bool:
         """Steal a random card from opponent"""
@@ -92,13 +89,16 @@ class QuickFingers(Equipment):
             return False
         
         import random
-        stolen_card = random.choice(game_state.opponent.hand)
+        stolen_card = random.choice(game_state.ai.hand)
         
         # Add to player hand
         game_state.player.hand.append(stolen_card)
         
         # Remove from opponent hand
-        game_state.opponent.hand.remove(stolen_card)
+        game_state.ai.hand.remove(stolen_card)
+        
+        # Resort the player's hand
+        game_state.resort_hand(game_state.player)
         
         self.used_this_fight = True
         return True
@@ -192,6 +192,9 @@ class GamblersDice(Equipment):
             # Remove drawn cards from discard pile
             for card in drawn_cards:
                 game_state.discard_pile.remove(card)
+        
+        # Resort the player's hand
+        game_state.resort_hand(game_state.player)
         
         self.used_this_fight = True
         return True

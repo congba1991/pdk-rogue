@@ -1,4 +1,5 @@
 import pygame
+import sys
 from lib.constants import *
 from main_menu import MainMenu
 

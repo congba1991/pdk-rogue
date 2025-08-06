@@ -85,7 +85,7 @@ class CardSteal(SkillCard):
         )
     
     def can_use(self, game_state: Any) -> bool:
-        return len(game_state.opponent.hand) > 0
+        return len(game_state.ai.hand) > 0
     
     def use(self, game_state: Any) -> bool:
         if not self.can_use(game_state):
@@ -93,13 +93,13 @@ class CardSteal(SkillCard):
         
         # Take 1 random card from opponent
         import random
-        stolen_card = random.choice(game_state.opponent.hand)
+        stolen_card = random.choice(game_state.ai.hand)
         
         # Add to player hand
         game_state.player.hand.append(stolen_card)
         
         # Remove from opponent hand
-        game_state.opponent.hand.remove(stolen_card)
+        game_state.ai.hand.remove(stolen_card)
         
         return True
 

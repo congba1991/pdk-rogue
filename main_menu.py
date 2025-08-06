@@ -3,6 +3,10 @@ import sys
 from lib.constants import *
 from lib.profile import ProfileManager, Profile
 from lib.run_system import RunManager
+from lib.enhanced_game import EnhancedFightGame
+from lib.card import Card, Suit
+from lib.player import FightPlayer
+import random
 
 
 class MainMenu:
@@ -14,7 +18,7 @@ class MainMenu:
         self.profile_manager = ProfileManager()
         
         # Menu states
-        self.state = "main"  # "main", "profile_select", "create_profile", "region_select"
+        self.state = "main"  # "main", "profile_select", "create_profile", "region_select", "pre_fight"
         self.current_profile = None
         self.selected_profile = None
         self.new_profile_name = ""
@@ -43,6 +47,14 @@ class MainMenu:
         self.region_buttons = []
         self.start_run_button = pygame.Rect(center_x, WINDOW_HEIGHT - 120, button_width, button_height)
         
+        # Pre-fight buttons
+        self.fight_button = pygame.Rect(center_x, 400, button_width, button_height)
+        self.give_up_button = pygame.Rect(center_x, 470, button_width, button_height)
+        
+        # Pre-fight card preview
+        self.preview_player = None
+        self.preview_deck = None
+        
     def draw_button(self, rect, text, hover=False, disabled=False):
         """Draw a button with hover effects"""
         color = BUTTON_HOVER if hover else BUTTON_COLOR
@@ -55,6 +67,53 @@ class MainMenu:
         text_surface = self.font.render(text, True, TEXT_COLOR if not disabled else (150, 150, 150))
         text_rect = text_surface.get_rect(center=rect.center)
         self.screen.blit(text_surface, text_rect)
+        
+    def draw_card(self, card, x, y):
+        """Draw a card at the specified position"""
+        pygame.draw.rect(self.screen, CARD_COLOR, (x, y, CARD_WIDTH, CARD_HEIGHT))
+        pygame.draw.rect(self.screen, TEXT_COLOR, (x, y, CARD_WIDTH, CARD_HEIGHT), 2)
+
+        # Draw rank
+        color = RED_COLOR if card.suit in [Suit.HEARTS, Suit.DIAMONDS] else BLACK_COLOR
+        rank_text = self.small_font.render(card.rank, True, color)
+        self.screen.blit(rank_text, (x + 5, y + 5))
+
+        # Draw suit
+        suit_text = self.small_font.render(card.suit.value, True, color)
+        self.screen.blit(suit_text, (x + 5, y + 25))
+        
+    def draw_hand_preview(self, player, y_pos):
+        """Draw player's hand for preview"""
+        if not player or not player.hand:
+            return
+            
+        num_cards = len(player.hand)
+        if num_cards == 0:
+            return
+            
+        # Calculate spacing to keep cards in a single line with overlap
+        margin = 50
+        available_width = WINDOW_WIDTH - 2 * margin
+        
+        if num_cards > 1:
+            total_card_width = num_cards * CARD_WIDTH
+            if total_card_width > available_width:
+                overlap_needed = total_card_width - available_width
+                card_spacing = -(overlap_needed // (num_cards - 1))
+                card_spacing = max(card_spacing, -(CARD_WIDTH - 20))
+            else:
+                card_spacing = (available_width - total_card_width) // (num_cards - 1)
+                card_spacing = min(card_spacing, 10)
+        else:
+            card_spacing = 0
+        
+        total_width = num_cards * CARD_WIDTH + (num_cards - 1) * card_spacing
+        start_x = margin + (available_width - total_width) // 2
+        
+        for i, card in enumerate(player.hand):
+            x = start_x + i * (CARD_WIDTH + card_spacing)
+            y = y_pos
+            self.draw_card(card, x, y)
         
     def draw_input_box(self, rect, text, active=False):
         """Draw an input box"""
@@ -190,21 +249,146 @@ class MainMenu:
         # Back button
         self.draw_button(self.back_button, "Back", self.back_button.collidepoint(mouse_pos))
         
+    def draw_pre_fight(self):
+        """Draw pre-fight decision screen"""
+        self.screen.fill(BG_COLOR)
+        
+        # Title
+        fight_num = self.run_manager.run_state.current_fight + 1
+        title = self.font.render(f"Fight {fight_num}/{self.run_manager.run_state.total_fights}", True, TEXT_COLOR)
+        title_rect = title.get_rect(center=(WINDOW_WIDTH // 2, 100))
+        self.screen.blit(title, title_rect)
+        
+        # Current status
+        lp_text = f"Life Points: {self.run_manager.run_state.life_points}"
+        lp_surface = self.font.render(lp_text, True, TEXT_COLOR)
+        lp_rect = lp_surface.get_rect(center=(WINDOW_WIDTH // 2, 150))
+        self.screen.blit(lp_surface, lp_rect)
+        
+        # Show preview hand
+        hand_label = self.small_font.render("Your hand:", True, TEXT_COLOR)
+        self.screen.blit(hand_label, (50, 200))
+        
+        if self.preview_player:
+            self.draw_hand_preview(self.preview_player, 220)
+        
+        # Instructions
+        instructions = [
+            "Choose your action:",
+            "Fight: Risk losing 2 LP if defeated",
+            "Give Up: Lose 1 LP and skip this fight"
+        ]
+        
+        for i, instruction in enumerate(instructions):
+            inst_surface = self.small_font.render(instruction, True, TEXT_COLOR)
+            inst_rect = inst_surface.get_rect(center=(WINDOW_WIDTH // 2, 320 + i * 25))
+            self.screen.blit(inst_surface, inst_rect)
+        
+        # Buttons
+        mouse_pos = pygame.mouse.get_pos()
+        self.draw_button(self.fight_button, "Fight", 
+                        self.fight_button.collidepoint(mouse_pos))
+        self.draw_button(self.give_up_button, "Give Up", 
+                        self.give_up_button.collidepoint(mouse_pos))
+        
+        # Back button (to return to region select)
+        self.draw_button(self.back_button, "Back", self.back_button.collidepoint(mouse_pos))
+        
+    def create_preview_deck(self):
+        """Create and deal cards for preview"""
+        # Create deck
+        deck = []
+        for suit in Suit:
+            for rank in Card.VALUE_MAP.keys():
+                deck.append(Card(rank, suit))
+
+        # Shuffle and deal
+        random.shuffle(deck)
+
+        # Discard first 8 cards
+        discard_pile = deck[:8]
+        deck = deck[8:]
+
+        # Create preview player and deal 22 cards
+        self.preview_player = FightPlayer("Player")
+        self.preview_player.hand = deck[:22]
+        self.preview_player.sort_hand()
+        
+        # Store remaining deck for actual fight
+        self.preview_deck = deck
+        
     def start_run(self, region_name):
         """Start a new run in the selected region"""
         # Create run manager
-        run_manager = RunManager(self.current_profile, region_name)
-        run_manager.start_run()
+        self.run_manager = RunManager(self.current_profile, region_name)
+        self.run_manager.start_run()
         
-        # For now, just start the combat game
-        # Later this will be integrated with the run system
-        from lib.game import FightGame
-        combat_game = FightGame(self.screen)
-        combat_game.run()
+        # Create preview deck and go to pre-fight screen
+        self.create_preview_deck()
+        self.state = "pre_fight"
         
-        # When combat ends, save profile and return to region selection
+    def check_run_status_and_continue(self):
+        """Check run status and continue to next fight or end run"""
+        if self.run_manager.run_state.is_run_complete():
+            # Run completed
+            self.run_manager.complete_run()
+            self.profile_manager.save_profile(self.current_profile)
+            print(f"Run completed! Won {self.run_manager.run_state.fights_won}/{self.run_manager.run_state.total_fights} fights")
+            self.state = "region_select"
+            return
+            
+        if self.run_manager.run_state.is_run_failed():
+            # Run failed
+            self.run_manager.fail_run()
+            self.profile_manager.save_profile(self.current_profile)
+            print(f"Run failed! LP reached 0. Final score: {self.run_manager.run_state.fights_won} fights won")
+            self.state = "region_select"
+            return
+            
+        # Create new preview deck and go to pre-fight screen
+        self.create_preview_deck()
+        self.state = "pre_fight"
+        
+    def start_actual_fight(self):
+        """Start the actual combat"""
+        # Use all unlocked skill cards, items, and equipment from the profile
+        unlocked_skill_cards = list(self.current_profile.unlocked_skill_cards)
+        unlocked_items = list(self.current_profile.unlocked_items)
+        unlocked_equipment = list(self.current_profile.unlocked_equipment)
+        
+        # Start the enhanced combat game with pre-dealt cards
+        combat_game = EnhancedFightGame(
+            screen=self.screen,
+            player_skill_cards=unlocked_skill_cards,
+            player_items=unlocked_items,
+            player_equipment=unlocked_equipment,
+            player_starting_hp=10,
+            ai_starting_hp=10,
+            run_manager=self.run_manager,
+            preview_player=self.preview_player,
+            preview_deck=self.preview_deck
+        )
+        result = combat_game.run()
+        
+        # Handle fight result
+        if result and result.name == "Player":
+            self.run_manager.end_fight(True)
+        else:
+            self.run_manager.end_fight(False)
+        
+        # Save profile and check run status
         self.profile_manager.save_profile(self.current_profile)
-        self.state = "region_select"
+        self.check_run_status_and_continue()
+        
+    def give_up_fight(self):
+        """Give up current fight, lose 1 LP"""
+        self.run_manager.run_state.life_points = max(0, self.run_manager.run_state.life_points - 1)
+        self.run_manager.run_state.current_fight += 1
+        self.run_manager.run_state.fights_lost += 1
+        
+        # Save profile and check run status
+        self.profile_manager.save_profile(self.current_profile)
+        self.check_run_status_and_continue()
         
     def handle_click(self, pos):
         """Handle mouse clicks"""
@@ -240,6 +424,14 @@ class MainMenu:
                 self.state = "profile_select"
                 self.current_profile = None
                 
+        elif self.state == "pre_fight":
+            if self.fight_button.collidepoint(pos):
+                self.start_actual_fight()
+            elif self.give_up_button.collidepoint(pos):
+                self.give_up_fight()
+            elif self.back_button.collidepoint(pos):
+                self.state = "region_select"
+                
     def handle_keydown(self, event):
         """Handle keyboard input"""
         if self.state == "create_profile" and self.typing:
@@ -265,6 +457,8 @@ class MainMenu:
             self.draw_create_profile()
         elif self.state == "region_select":
             self.draw_region_select()
+        elif self.state == "pre_fight":
+            self.draw_pre_fight()
         
     def run(self):
         """Main menu loop"""
