@@ -11,6 +11,8 @@ from collections import defaultdict
 import itertools
 import random
 import json
+import os
+
 try:
     import mcts_rust
 except ImportError:
@@ -20,8 +22,46 @@ class RoguePlayer:
     def __init__(self, name):
         self.name = name
         self.life = 10
-        self.skill_cards = []
-        self.items = []
+        self.equipment_unlocked = set()
+        self.equipment_slots = 1
+        self.selected_equipment = []
+        # Add more meta fields as needed
+
+    def to_dict(self):
+        return {
+            'name': self.name,
+            'life': self.life,
+            'equipment_unlocked': list(self.equipment_unlocked),
+            'equipment_slots': self.equipment_slots,
+            'selected_equipment': self.selected_equipment,
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        obj = cls(data['name'])
+        obj.life = data.get('life', 10)
+        obj.equipment_unlocked = set(data.get('equipment_unlocked', []))
+        obj.equipment_slots = data.get('equipment_slots', 1)
+        obj.selected_equipment = data.get('selected_equipment', [])
+        return obj
+
+    @staticmethod
+    def save_profile(player, filename):
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        with open(filename, 'w') as f:
+            json.dump(player.to_dict(), f, indent=2)
+
+    @staticmethod
+    def load_profile(filename):
+        with open(filename, 'r') as f:
+            data = json.load(f)
+        return RoguePlayer.from_dict(data)
+
+    @staticmethod
+    def list_profiles(profile_dir="profiles"):
+        if not os.path.exists(profile_dir):
+            return []
+        return [f for f in os.listdir(profile_dir) if f.endswith('.json')]
 
 
 class FightPlayer:
@@ -164,6 +204,7 @@ class FightPlayer:
                             if combo and combo.type == ComboType.PLANE_WITH_PAIRS:
                                 planes.append(combo)
         return planes
+
     def __init__(self, name, is_ai=False):
         self.name = name
         self.is_ai = is_ai
