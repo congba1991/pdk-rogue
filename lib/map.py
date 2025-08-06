@@ -60,3 +60,21 @@ class RogueMap:
 
     def __repr__(self):
         return f"RogueNode({self.map_name})"
+
+class RogueRegion:
+    def __init__(self, region_name: str):
+        self.region_name = region_name
+        self.maps = []
+
+    def add_map(self, rogue_map):
+        if isinstance(rogue_map, RogueMap):
+            self.maps.append(rogue_map)
+        else:
+            raise TypeError("Must add a RogueMap instance.")
+
+    def __repr__(self):
+        return f"RogueRegion({self.region_name})"
+
+    def __str__(self):
+        return f"Region: {self.region_name} ({len(self.maps)} maps)"
+

@@ -1,10 +1,10 @@
 import pygame
 from lib.constants import *
-from lib.game import FightGame
+from main_menu import MainMenu
 
 if __name__ == "__main__":
     pygame.init()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-    pygame.display.set_caption("跑得快 (Run Fast)")
-    game = FightGame(screen)
-    game.run()
+    pygame.display.set_caption("PDK Rogue")
+    menu = MainMenu(screen)
+    menu.run()

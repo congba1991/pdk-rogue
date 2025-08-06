@@ -4,5 +4,9 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+/profiles
+/profiles/*
+/venv
+/venv/*
 # Do not ignore .gitignore itself
 !.gitignore

@@ -1,7 +1,15 @@
 
 from dataclasses import dataclass, field
 from typing import Optional, List
-from enum import Enum, StrEnum
+from enum import Enum
+
+# --- Custom StrEnum implementation for Python 3.9 compatibility ---
+class StrEnum(str, Enum):
+    def __str__(self):
+        return self.value
+    
+    def __repr__(self):
+        return f"{self.__class__.__name__}.{self.name}"
 
 # --- Enums for Rarity and Equipment Tier ---
 class Rarity(StrEnum):
