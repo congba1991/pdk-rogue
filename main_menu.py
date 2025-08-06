@@ -7,6 +7,7 @@ from lib.enhanced_game import EnhancedFightGame
 from lib.card import Card, Suit
 from lib.player import FightPlayer
 from lib.skill_cards import get_random_skill_cards, get_skill_card
+from lib.equipment import get_all_equipment, get_equipment
 import random
 
 
@@ -19,9 +20,10 @@ class MainMenu:
         self.profile_manager = ProfileManager()
         
         # Menu states
-        self.state = "main"  # "main", "profile_select", "create_profile", "region_select", "pre_fight", "reward_select"
+        self.state = "main"  # "main", "profile_select", "create_profile", "region_select", "equipment_select", "pre_fight", "reward_select"
         self.current_profile = None
         self.selected_profile = None
+        self.selected_region = None
         self.new_profile_name = ""
         self.typing = False
         
@@ -59,6 +61,11 @@ class MainMenu:
         # Reward selection
         self.reward_cards = []
         self.reward_buttons = []
+        
+        # Equipment selection
+        self.equipment_buttons = []
+        self.selected_equipment = []
+        self.confirm_equipment_button = pygame.Rect(center_x, WINDOW_HEIGHT - 80, button_width, button_height)
         
     def draw_button(self, rect, text, hover=False, disabled=False):
         """Draw a button with hover effects"""
@@ -248,7 +255,9 @@ class MainMenu:
             
             # Handle click
             if hover and pygame.mouse.get_pressed()[0]:
-                self.start_run(region_name)
+                self.selected_region = region_name
+                self.selected_equipment = []  # Reset equipment selection
+                self.state = "equipment_select"
                 return
         
         # Back button
@@ -374,6 +383,89 @@ class MainMenu:
         self.draw_button(skip_button, "Skip Reward", skip_button.collidepoint(mouse_pos))
         self.skip_reward_button = skip_button
         
+    def draw_equipment_select(self):
+        """Draw equipment selection screen before starting a run"""
+        self.screen.fill(BG_COLOR)
+        
+        # Title
+        title = self.font.render("Select Equipment", True, TEXT_COLOR)
+        title_rect = title.get_rect(center=(WINDOW_WIDTH // 2, 50))
+        self.screen.blit(title, title_rect)
+        
+        # Equipment slots info
+        available_slots = self.current_profile.equipment_slots
+        used_slots = sum(eq.slot for eq in self.selected_equipment)
+        slots_text = f"Equipment Slots: {used_slots}/{available_slots}"
+        slots_surface = self.font.render(slots_text, True, TEXT_COLOR)
+        self.screen.blit(slots_surface, (20, 90))
+        
+        # Instructions
+        instruction = self.small_font.render("Select equipment to bring on your run:", True, TEXT_COLOR)
+        self.screen.blit(instruction, (20, 120))
+        
+        # Show selected equipment
+        if self.selected_equipment:
+            selected_label = self.small_font.render("Selected:", True, TEXT_COLOR)
+            self.screen.blit(selected_label, (20, 150))
+            
+            for i, equipment in enumerate(self.selected_equipment):
+                y_pos = 170 + i * 20
+                eq_text = f"• {equipment.name} (Slot: {equipment.slot})"
+                eq_surface = self.small_font.render(eq_text, True, TEXT_COLOR)
+                self.screen.blit(eq_surface, (30, y_pos))
+        
+        # Available equipment
+        available_equipment = [get_equipment(name) for name in self.current_profile.unlocked_equipment]
+        self.equipment_buttons = []
+        mouse_pos = pygame.mouse.get_pos()
+        
+        start_y = 250
+        for i, equipment in enumerate(available_equipment):
+            y_pos = start_y + i * 80
+            button_rect = pygame.Rect(50, y_pos, WINDOW_WIDTH - 100, 70)
+            self.equipment_buttons.append((equipment, button_rect))
+            
+            hover = button_rect.collidepoint(mouse_pos)
+            
+            # Check if already selected
+            already_selected = any(eq.name == equipment.name for eq in self.selected_equipment)
+            
+            # Check if can be equipped (slots available)
+            can_equip = (used_slots + equipment.slot <= available_slots) and not already_selected
+            
+            # Different colors for different states
+            if already_selected:
+                # Green for selected
+                pygame.draw.rect(self.screen, (50, 150, 50), button_rect)
+            elif can_equip and hover:
+                # Hover color
+                pygame.draw.rect(self.screen, BUTTON_HOVER, button_rect)
+            elif can_equip:
+                # Normal available
+                pygame.draw.rect(self.screen, BUTTON_COLOR, button_rect)
+            else:
+                # Gray for unavailable
+                pygame.draw.rect(self.screen, (100, 100, 100), button_rect)
+            
+            pygame.draw.rect(self.screen, TEXT_COLOR, button_rect, 2)
+            
+            # Draw equipment info
+            name_surface = self.font.render(equipment.name, True, TEXT_COLOR)
+            desc_surface = self.small_font.render(equipment.description, True, TEXT_COLOR)
+            tier_surface = self.small_font.render(f"[{equipment.tier.name}] Slots: {equipment.slot}", True, TEXT_COLOR)
+            
+            self.screen.blit(name_surface, (button_rect.x + 10, button_rect.y + 5))
+            self.screen.blit(desc_surface, (button_rect.x + 10, button_rect.y + 30))
+            self.screen.blit(tier_surface, (button_rect.x + 10, button_rect.y + 50))
+        
+        # Confirm button
+        can_confirm = True  # Can always confirm, even with no equipment
+        self.draw_button(self.confirm_equipment_button, "Start Run", 
+                        self.confirm_equipment_button.collidepoint(mouse_pos), not can_confirm)
+        
+        # Back button
+        self.draw_button(self.back_button, "Back", self.back_button.collidepoint(mouse_pos))
+        
     def create_preview_deck(self):
         """Create and deal cards for preview"""
         # Create deck
@@ -401,6 +493,11 @@ class MainMenu:
         """Start a new run in the selected region"""
         # Create run manager
         self.run_manager = RunManager(self.current_profile, region_name)
+        
+        # Equip selected equipment
+        for equipment in self.selected_equipment:
+            self.run_manager.run_state.equip_item(equipment.name)
+        
         self.run_manager.start_run()
         
         # Create preview deck and go to pre-fight screen
@@ -431,17 +528,17 @@ class MainMenu:
         
     def start_actual_fight(self):
         """Start the actual combat"""
-        # Use skill cards from run inventory and items/equipment from profile
+        # Use skill cards from run inventory, items from profile, equipment from run
         run_skill_cards = [card.name for card in self.run_manager.run_state.skill_cards]
         unlocked_items = list(self.current_profile.unlocked_items)
-        unlocked_equipment = list(self.current_profile.unlocked_equipment)
+        run_equipment = [eq.name for eq in self.run_manager.run_state.equipped_equipment]
         
         # Start the enhanced combat game with pre-dealt cards
         combat_game = EnhancedFightGame(
             screen=self.screen,
             player_skill_cards=run_skill_cards,
             player_items=unlocked_items,
-            player_equipment=unlocked_equipment,
+            player_equipment=run_equipment,
             player_starting_hp=10,
             ai_starting_hp=10,
             run_manager=self.run_manager,
@@ -514,6 +611,36 @@ class MainMenu:
                 self.state = "profile_select"
                 self.current_profile = None
                 
+        elif self.state == "equipment_select":
+            # Check equipment clicks
+            for equipment, button_rect in self.equipment_buttons:
+                if button_rect.collidepoint(pos):
+                    # Check if already selected
+                    already_selected = any(eq.name == equipment.name for eq in self.selected_equipment)
+                    
+                    if already_selected:
+                        # Unselect equipment
+                        self.selected_equipment = [eq for eq in self.selected_equipment if eq.name != equipment.name]
+                    else:
+                        # Check if we have slots available
+                        used_slots = sum(eq.slot for eq in self.selected_equipment)
+                        available_slots = self.current_profile.equipment_slots
+                        
+                        if used_slots + equipment.slot <= available_slots:
+                            # Add equipment
+                            self.selected_equipment.append(equipment)
+                    return
+            
+            # Check confirm button
+            if self.confirm_equipment_button.collidepoint(pos):
+                self.start_run(self.selected_region)
+                return
+            
+            # Check back button
+            if self.back_button.collidepoint(pos):
+                self.state = "region_select"
+                return
+                
         elif self.state == "pre_fight":
             if self.fight_button.collidepoint(pos):
                 self.start_actual_fight()
@@ -572,6 +699,8 @@ class MainMenu:
             self.draw_create_profile()
         elif self.state == "region_select":
             self.draw_region_select()
+        elif self.state == "equipment_select":
+            self.draw_equipment_select()
         elif self.state == "pre_fight":
             self.draw_pre_fight()
         elif self.state == "reward_select":
