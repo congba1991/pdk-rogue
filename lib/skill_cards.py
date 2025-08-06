@@ -104,11 +104,112 @@ class CardSteal(SkillCard):
         return True
 
 
+class DamageBoost(SkillCard):
+    """Next damage you deal is increased by 1"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Damage Boost",
+            rarity=Rarity.COMMON,
+            description="Next damage you deal is increased by 1",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        # Add damage bonus for next combo that beats opponent
+        game_state.last_combo_damage_bonus += 1
+        return True
+
+
+class HandRefresh(SkillCard):
+    """Draw 3 cards from the deck if available"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Hand Refresh",
+            rarity=Rarity.COMMON,
+            description="Draw 3 cards from the deck if available",
+            energy_cost=0
+        )
+    
+    def can_use(self, game_state: Any) -> bool:
+        # Can always use (even if no cards to draw)
+        return True
+    
+    def use(self, game_state: Any) -> bool:
+        # Draw up to 3 cards from discard pile (simulating deck)
+        import random
+        cards_to_draw = min(3, len(game_state.discard_pile))
+        if cards_to_draw > 0:
+            drawn_cards = random.sample(game_state.discard_pile, cards_to_draw)
+            game_state.player.hand.extend(drawn_cards)
+            for card in drawn_cards:
+                game_state.discard_pile.remove(card)
+        return True
+
+
+class ShieldBreaker(SkillCard):
+    """Next time opponent would take damage, they take 1 extra damage"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Shield Breaker",
+            rarity=Rarity.RARE,
+            description="Next time opponent would take damage, they take 1 extra damage",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        # Add damage bonus for next successful attack
+        game_state.last_combo_damage_bonus += 1
+        return True
+
+
+class CardSort(SkillCard):
+    """Reorganize your hand optimally"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Card Sort",
+            rarity=Rarity.COMMON,
+            description="Reorganize your hand optimally",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        # Resort the hand
+        game_state.player.sort_hand()
+        return True
+
+
+class LifeSteal(SkillCard):
+    """Next damage you deal also heals you for 1 HP"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Life Steal",
+            rarity=Rarity.RARE,
+            description="Next damage you deal also heals you for 1 HP",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        # This would need special handling in combat system
+        game_state.last_combo_damage_bonus += 0  # No damage bonus
+        # TODO: Add life steal effect tracking
+        return True
+
+
 # Registry of all skill cards
 SKILL_CARDS = {
     "Discard Grab": DiscardGrab,
     "Time Warp": TimeWarp,
     "Card Steal": CardSteal,
+    "Damage Boost": DamageBoost,
+    "Hand Refresh": HandRefresh,
+    "Shield Breaker": ShieldBreaker,
+    "Card Sort": CardSort,
+    "Life Steal": LifeSteal,
 }
 
 
@@ -121,4 +222,17 @@ def get_skill_card(name: str) -> Optional[SkillCard]:
 
 def get_all_skill_cards() -> List[SkillCard]:
     """Get all available skill cards"""
-    return [card_class() for card_class in SKILL_CARDS.values()] 
+    return [card_class() for card_class in SKILL_CARDS.values()]
+
+
+def get_random_skill_cards(count: int = 3, exclude: List[str] = None) -> List[SkillCard]:
+    """Get random skill cards for rewards"""
+    import random
+    exclude = exclude or []
+    available_cards = [name for name in SKILL_CARDS.keys() if name not in exclude]
+    
+    if len(available_cards) < count:
+        count = len(available_cards)
+    
+    selected_names = random.sample(available_cards, count)
+    return [get_skill_card(name) for name in selected_names] 

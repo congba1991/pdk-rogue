@@ -16,6 +16,7 @@ class RunState:
     life_points: int = 10
     max_life_points: int = 10
     skill_cards: List[SkillCard] = field(default_factory=list)
+    max_skill_cards: int = 5  # Inventory limit for skill cards
     temporary_items: List[Item] = field(default_factory=list)
     equipped_equipment: List[Equipment] = field(default_factory=list)
     fights_won: int = 0
@@ -30,10 +31,33 @@ class RunState:
         """Add a skill card to the run"""
         if skill_card_name in self.profile.unlocked_skill_cards:
             skill_card = get_skill_card(skill_card_name)
-            if skill_card and len(self.skill_cards) < 5:
+            if skill_card and len(self.skill_cards) < self.max_skill_cards:
                 self.skill_cards.append(skill_card)
                 return True
         return False
+    
+    def add_skill_card_instance(self, skill_card: SkillCard) -> bool:
+        """Add a skill card instance to the run inventory"""
+        if len(self.skill_cards) < self.max_skill_cards:
+            self.skill_cards.append(skill_card)
+            return True
+        return False
+    
+    def remove_skill_card(self, skill_card_name: str) -> bool:
+        """Remove a skill card from the run inventory"""
+        for i, card in enumerate(self.skill_cards):
+            if card.name == skill_card_name:
+                self.skill_cards.pop(i)
+                return True
+        return False
+    
+    def can_add_skill_card(self) -> bool:
+        """Check if there's space for another skill card"""
+        return len(self.skill_cards) < self.max_skill_cards
+    
+    def get_skill_card_names(self) -> List[str]:
+        """Get list of skill card names in inventory"""
+        return [card.name for card in self.skill_cards]
     
     def add_item(self, item_name: str) -> bool:
         """Add an item to the run"""

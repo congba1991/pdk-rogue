@@ -6,6 +6,7 @@ from lib.run_system import RunManager
 from lib.enhanced_game import EnhancedFightGame
 from lib.card import Card, Suit
 from lib.player import FightPlayer
+from lib.skill_cards import get_random_skill_cards, get_skill_card
 import random
 
 
@@ -18,7 +19,7 @@ class MainMenu:
         self.profile_manager = ProfileManager()
         
         # Menu states
-        self.state = "main"  # "main", "profile_select", "create_profile", "region_select", "pre_fight"
+        self.state = "main"  # "main", "profile_select", "create_profile", "region_select", "pre_fight", "reward_select"
         self.current_profile = None
         self.selected_profile = None
         self.new_profile_name = ""
@@ -54,6 +55,10 @@ class MainMenu:
         # Pre-fight card preview
         self.preview_player = None
         self.preview_deck = None
+        
+        # Reward selection
+        self.reward_cards = []
+        self.reward_buttons = []
         
     def draw_button(self, rect, text, hover=False, disabled=False):
         """Draw a button with hover effects"""
@@ -294,6 +299,81 @@ class MainMenu:
         # Back button (to return to region select)
         self.draw_button(self.back_button, "Back", self.back_button.collidepoint(mouse_pos))
         
+    def draw_reward_select(self):
+        """Draw reward selection screen after winning a fight"""
+        self.screen.fill(BG_COLOR)
+        
+        # Title
+        title = self.font.render("Victory Reward!", True, TEXT_COLOR)
+        title_rect = title.get_rect(center=(WINDOW_WIDTH // 2, 50))
+        self.screen.blit(title, title_rect)
+        
+        # Instructions
+        instruction = self.small_font.render("Choose a skill card to add to your inventory:", True, TEXT_COLOR)
+        inst_rect = instruction.get_rect(center=(WINDOW_WIDTH // 2, 90))
+        self.screen.blit(instruction, inst_rect)
+        
+        # Current inventory status
+        current_count = len(self.run_manager.run_state.skill_cards)
+        max_count = self.run_manager.run_state.max_skill_cards
+        inventory_text = f"Skill Card Inventory: {current_count}/{max_count}"
+        inv_surface = self.small_font.render(inventory_text, True, TEXT_COLOR)
+        self.screen.blit(inv_surface, (20, 120))
+        
+        # Show current inventory if any
+        if current_count > 0:
+            inv_label = self.small_font.render("Current Inventory:", True, TEXT_COLOR)
+            self.screen.blit(inv_label, (20, 150))
+            
+            for i, card in enumerate(self.run_manager.run_state.skill_cards):
+                y_pos = 170 + i * 20
+                card_text = f"• {card.name}"
+                card_surface = self.small_font.render(card_text, True, TEXT_COLOR)
+                self.screen.blit(card_surface, (30, y_pos))
+        
+        # Draw reward cards
+        self.reward_buttons = []
+        mouse_pos = pygame.mouse.get_pos()
+        
+        for i, card in enumerate(self.reward_cards):
+            y_pos = 300 + i * 80
+            button_rect = pygame.Rect(100, y_pos, WINDOW_WIDTH - 200, 70)
+            self.reward_buttons.append((card, button_rect))
+            
+            hover = button_rect.collidepoint(mouse_pos)
+            # Check if inventory is full
+            can_select = self.run_manager.run_state.can_add_skill_card()
+            
+            self.draw_button(button_rect, "", hover, not can_select)
+            
+            # Draw card info
+            name_surface = self.font.render(card.name, True, TEXT_COLOR)
+            desc_surface = self.small_font.render(card.description, True, TEXT_COLOR)
+            rarity_surface = self.small_font.render(f"[{card.rarity.name}]", True, TEXT_COLOR)
+            
+            self.screen.blit(name_surface, (button_rect.x + 10, button_rect.y + 5))
+            self.screen.blit(desc_surface, (button_rect.x + 10, button_rect.y + 30))
+            self.screen.blit(rarity_surface, (button_rect.x + 10, button_rect.y + 50))
+        
+        # If inventory is full, show message and option to abandon cards
+        if not self.run_manager.run_state.can_add_skill_card():
+            full_text = "Inventory Full! Click on a current skill card to abandon it first."
+            full_surface = self.small_font.render(full_text, True, (255, 100, 100))  # Red text
+            full_rect = full_surface.get_rect(center=(WINDOW_WIDTH // 2, 250))
+            self.screen.blit(full_surface, full_rect)
+            
+            # Make current inventory cards clickable for abandoning
+            for i, card in enumerate(self.run_manager.run_state.skill_cards):
+                y_pos = 170 + i * 20
+                abandon_rect = pygame.Rect(200, y_pos - 2, 200, 20)
+                if abandon_rect.collidepoint(mouse_pos):
+                    pygame.draw.rect(self.screen, (100, 100, 100), abandon_rect, 2)
+        
+        # Skip reward button
+        skip_button = pygame.Rect(WINDOW_WIDTH // 2 - 100, WINDOW_HEIGHT - 80, 200, 40)
+        self.draw_button(skip_button, "Skip Reward", skip_button.collidepoint(mouse_pos))
+        self.skip_reward_button = skip_button
+        
     def create_preview_deck(self):
         """Create and deal cards for preview"""
         # Create deck
@@ -351,15 +431,15 @@ class MainMenu:
         
     def start_actual_fight(self):
         """Start the actual combat"""
-        # Use all unlocked skill cards, items, and equipment from the profile
-        unlocked_skill_cards = list(self.current_profile.unlocked_skill_cards)
+        # Use skill cards from run inventory and items/equipment from profile
+        run_skill_cards = [card.name for card in self.run_manager.run_state.skill_cards]
         unlocked_items = list(self.current_profile.unlocked_items)
         unlocked_equipment = list(self.current_profile.unlocked_equipment)
         
         # Start the enhanced combat game with pre-dealt cards
         combat_game = EnhancedFightGame(
             screen=self.screen,
-            player_skill_cards=unlocked_skill_cards,
+            player_skill_cards=run_skill_cards,
             player_items=unlocked_items,
             player_equipment=unlocked_equipment,
             player_starting_hp=10,
@@ -372,13 +452,14 @@ class MainMenu:
         
         # Handle fight result
         if result and result.name == "Player":
+            # Player won - show reward screen
             self.run_manager.end_fight(True)
+            self.show_victory_rewards()
         else:
+            # Player lost - continue normally
             self.run_manager.end_fight(False)
-        
-        # Save profile and check run status
-        self.profile_manager.save_profile(self.current_profile)
-        self.check_run_status_and_continue()
+            self.profile_manager.save_profile(self.current_profile)
+            self.check_run_status_and_continue()
         
     def give_up_fight(self):
         """Give up current fight, lose 1 LP"""
@@ -389,6 +470,15 @@ class MainMenu:
         # Save profile and check run status
         self.profile_manager.save_profile(self.current_profile)
         self.check_run_status_and_continue()
+        
+    def show_victory_rewards(self):
+        """Show reward selection after winning a fight"""
+        # Generate 3 random skill cards
+        current_cards = self.run_manager.run_state.get_skill_card_names()
+        self.reward_cards = get_random_skill_cards(3, exclude=current_cards)
+        
+        # Go to reward selection screen
+        self.state = "reward_select"
         
     def handle_click(self, pos):
         """Handle mouse clicks"""
@@ -432,6 +522,31 @@ class MainMenu:
             elif self.back_button.collidepoint(pos):
                 self.state = "region_select"
                 
+        elif self.state == "reward_select":
+            # Check reward card clicks
+            for card, button_rect in self.reward_buttons:
+                if button_rect.collidepoint(pos) and self.run_manager.run_state.can_add_skill_card():
+                    # Add selected card to inventory
+                    self.run_manager.run_state.add_skill_card_instance(card)
+                    self.profile_manager.save_profile(self.current_profile)
+                    self.check_run_status_and_continue()
+                    return
+            
+            # Check skip reward button
+            if hasattr(self, 'skip_reward_button') and self.skip_reward_button.collidepoint(pos):
+                self.check_run_status_and_continue()
+                return
+            
+            # Check inventory clicks for abandoning cards (if inventory is full)
+            if not self.run_manager.run_state.can_add_skill_card():
+                for i, card in enumerate(self.run_manager.run_state.skill_cards):
+                    y_pos = 170 + i * 20
+                    abandon_rect = pygame.Rect(200, y_pos - 2, 200, 20)
+                    if abandon_rect.collidepoint(pos):
+                        # Remove the clicked card
+                        self.run_manager.run_state.remove_skill_card(card.name)
+                        return
+                
     def handle_keydown(self, event):
         """Handle keyboard input"""
         if self.state == "create_profile" and self.typing:
@@ -459,6 +574,8 @@ class MainMenu:
             self.draw_region_select()
         elif self.state == "pre_fight":
             self.draw_pre_fight()
+        elif self.state == "reward_select":
+            self.draw_reward_select()
         
     def run(self):
         """Main menu loop"""
