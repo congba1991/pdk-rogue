@@ -399,8 +399,9 @@ class MainMenu:
                     scaled_image.blit(overlay, (0, 0))
                 
                 self.screen.blit(scaled_image, card_rect)
-                
-                # Draw border
+                # Show description in a hovered box only if mouse is over the card
+                if hover:
+                    card.draw_hover_description(self.screen, self.small_font, card_rect, WINDOW_WIDTH, BLACK_COLOR, TEXT_COLOR)
                 border_color = SELECTED_COLOR if hover and can_select else TEXT_COLOR
                 border_width = 3 if hover and can_select else 1
                 pygame.draw.rect(self.screen, border_color, card_rect, border_width)
@@ -410,11 +411,6 @@ class MainMenu:
                 name_rect = name_surface.get_rect(centerx=card_rect.centerx, y=card_rect.bottom + 5)
                 self.screen.blit(name_surface, name_rect)
                 
-                # Draw description below name
-                desc_surface = self.small_font.render(card.description[:50] + "..." if len(card.description) > 50 else card.description, True, TEXT_COLOR)
-                desc_rect = desc_surface.get_rect(centerx=card_rect.centerx, y=name_rect.bottom + 3)
-                self.screen.blit(desc_surface, desc_rect)
-                
             else:
                 # Fallback to button if image not found
                 self.draw_button(card_rect, "", hover, not can_select)
@@ -423,10 +419,13 @@ class MainMenu:
                 name_surface = self.font.render(card.name, True, TEXT_COLOR)
                 desc_surface = self.small_font.render(card.description, True, TEXT_COLOR)
                 rarity_surface = self.small_font.render(f"[{card.rarity.name}]", True, TEXT_COLOR)
-                
                 self.screen.blit(name_surface, (card_rect.x + 10, card_rect.y + 5))
                 self.screen.blit(desc_surface, (card_rect.x + 10, card_rect.y + 30))
                 self.screen.blit(rarity_surface, (card_rect.x + 10, card_rect.y + 50))
+                # Draw border as in image branch
+                border_color = SELECTED_COLOR if hover and can_select else TEXT_COLOR
+                border_width = 3 if hover and can_select else 1
+                pygame.draw.rect(self.screen, border_color, card_rect, border_width)
         
         # If inventory is full, show message and option to abandon cards
         if not self.run_manager.run_state.can_add_skill_card():

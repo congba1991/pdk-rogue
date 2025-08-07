@@ -277,8 +277,10 @@ class EnhancedFightGame:
                     overlay.set_alpha(50)
                     card_image = card_image.copy()
                     card_image.blit(overlay, (0, 0))
+                    skill_card.draw_hover_description(self.screen, self.small_font, card_rect, WINDOW_WIDTH, BLACK_COLOR, TEXT_COLOR)
                 
                 self.screen.blit(card_image, card_rect)
+                
                 
                 # Draw border around card
                 border_color = SELECTED_COLOR if hover and can_use else TEXT_COLOR

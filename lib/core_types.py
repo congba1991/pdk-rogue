@@ -4,6 +4,7 @@ This module contains fundamental types used throughout the codebase.
 """
 
 from dataclasses import dataclass
+import pygame
 from enum import Enum
 
 

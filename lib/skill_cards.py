@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Optional, Any
 from lib.core_types import Rarity
+import pygame
 
 
 @dataclass
@@ -20,6 +21,41 @@ class SkillCard:
     def use(self, game_state: Any) -> bool:
         """Use the skill card. Returns True if successful."""
         return True
+    
+    def draw_hover_description(self, surface, font, card_rect, window_width, bg_color, text_color):
+        """Draw a floating description box above the card when hovered"""
+        desc_text = self.description
+        box_width = 260
+        # Wrap description text to fit box width
+        wrapped = []
+        words = desc_text.split()
+        line = ""
+        for word in words:
+            test_line = line + (" " if line else "") + word
+            test_surface = font.render(test_line, True, text_color)
+            if test_surface.get_width() > box_width - 20:
+                wrapped.append(line)
+                line = word
+            else:
+                line = test_line
+        if line:
+            wrapped.append(line)
+        # Calculate box height based on number of lines
+        line_height = 18
+        padding = 20
+        box_height = len(wrapped) * line_height + padding
+        box_x = card_rect.centerx - box_width // 2
+        box_y = card_rect.top - box_height - 10
+        # Ensure box stays within screen
+        box_x = max(10, min(box_x, window_width - box_width - 10))
+        box_y = max(10, box_y)
+        desc_rect = pygame.Rect(box_x, box_y, box_width, box_height)
+        pygame.draw.rect(surface, bg_color, desc_rect)
+        pygame.draw.rect(surface, text_color, desc_rect, 2)
+        # Render wrapped description lines
+        for j, wrap_line in enumerate(wrapped):
+            wrap_surface = font.render(wrap_line, True, text_color)
+            surface.blit(wrap_surface, (desc_rect.x + 10, desc_rect.y + 10 + j * line_height))
 
 
 class DiscardGrab(SkillCard):
