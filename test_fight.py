@@ -465,41 +465,53 @@ class TestFightConfig:
                             button_height = 40
                             center_x = WINDOW_WIDTH // 2 - button_width // 2
                             
-                            # Enemy type buttons
-                            regular_rect = pygame.Rect(center_x, 120, button_width, button_height)
-                            elite_rect = pygame.Rect(center_x, 170, button_width, button_height) 
-                            boss_rect = pygame.Rect(center_x, 220, button_width, button_height)
+                            # Calculate positions dynamically (same as draw method)
+                            y_pos = 120
                             
+                            # Regular enemies button
+                            regular_rect = pygame.Rect(center_x, y_pos, button_width, button_height)
                             if regular_rect.collidepoint(mouse_pos):
                                 self.enemy_type = EnemyType.REGULAR
                                 self.enemy_name = None
-                            elif elite_rect.collidepoint(mouse_pos):
+                            y_pos += 50
+                            
+                            # Regular enemy sub-buttons
+                            if self.enemy_type == EnemyType.REGULAR:
+                                for enemy_name in REGULAR_ENEMIES.keys():
+                                    enemy_rect = pygame.Rect(center_x + 20, y_pos, button_width - 40, 30)
+                                    if enemy_rect.collidepoint(mouse_pos):
+                                        self.enemy_name = enemy_name
+                                    y_pos += 35
+                            
+                            # Elite enemies button
+                            elite_rect = pygame.Rect(center_x, y_pos, button_width, button_height)
+                            if elite_rect.collidepoint(mouse_pos):
                                 self.enemy_type = EnemyType.ELITE
                                 self.enemy_name = None
-                            elif boss_rect.collidepoint(mouse_pos):
+                            y_pos += 50
+                            
+                            # Elite enemy sub-buttons
+                            if self.enemy_type == EnemyType.ELITE:
+                                for enemy_name in ELITE_ENEMIES.keys():
+                                    enemy_rect = pygame.Rect(center_x + 20, y_pos, button_width - 40, 30)
+                                    if enemy_rect.collidepoint(mouse_pos):
+                                        self.enemy_name = enemy_name
+                                    y_pos += 35
+                            
+                            # Boss enemies button
+                            boss_rect = pygame.Rect(center_x, y_pos, button_width, button_height)
+                            if boss_rect.collidepoint(mouse_pos):
                                 self.enemy_type = EnemyType.BOSS
                                 self.enemy_name = None
-                            else:
-                                # Check specific enemy selections
-                                y_pos = 170
-                                if self.enemy_type == EnemyType.REGULAR:
-                                    for enemy_name in REGULAR_ENEMIES.keys():
-                                        enemy_rect = pygame.Rect(center_x + 20, y_pos, button_width - 40, 30)
-                                        if enemy_rect.collidepoint(mouse_pos):
-                                            self.enemy_name = enemy_name
-                                        y_pos += 35
-                                elif self.enemy_type == EnemyType.ELITE:
-                                    for enemy_name in ELITE_ENEMIES.keys():
-                                        enemy_rect = pygame.Rect(center_x + 20, y_pos, button_width - 40, 30)
-                                        if enemy_rect.collidepoint(mouse_pos):
-                                            self.enemy_name = enemy_name
-                                        y_pos += 35
-                                elif self.enemy_type == EnemyType.BOSS:
-                                    for enemy_name in BOSS_ENEMIES.keys():
-                                        enemy_rect = pygame.Rect(center_x + 20, y_pos, button_width - 40, 30)
-                                        if enemy_rect.collidepoint(mouse_pos):
-                                            self.enemy_name = enemy_name
-                                        y_pos += 35
+                            y_pos += 50
+                            
+                            # Boss enemy sub-buttons
+                            if self.enemy_type == EnemyType.BOSS:
+                                for enemy_name in BOSS_ENEMIES.keys():
+                                    enemy_rect = pygame.Rect(center_x + 20, y_pos, button_width - 40, 30)
+                                    if enemy_rect.collidepoint(mouse_pos):
+                                        self.enemy_name = enemy_name
+                                    y_pos += 35
                             
                             # Back button
                             if self.back_button.collidepoint(mouse_pos):
