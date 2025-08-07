@@ -59,6 +59,17 @@ class RunState:
         """Get list of skill card names in inventory"""
         return [card.name for card in self.skill_cards]
     
+    def add_item_instance(self, item: Item) -> bool:
+        """Add an item instance to the run inventory"""
+        if len(self.temporary_items) < 5:
+            self.temporary_items.append(item)
+            return True
+        return False
+    
+    def get_item_names(self) -> List[str]:
+        """Get list of item names in inventory"""
+        return [item.name for item in self.temporary_items]
+    
     def add_item(self, item_name: str) -> bool:
         """Add an item to the run"""
         if item_name in self.profile.unlocked_items:

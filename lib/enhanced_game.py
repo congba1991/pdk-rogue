@@ -82,8 +82,9 @@ class EnhancedFightGame:
                     equipment.on_equip(self)
 
         # UI elements
-        self.play_button = pygame.Rect(WINDOW_WIDTH // 2 - 120, WINDOW_HEIGHT - 80, 100, 40)
-        self.pass_button = pygame.Rect(WINDOW_WIDTH // 2 + 20, WINDOW_HEIGHT - 80, 100, 40)
+        self.play_button = pygame.Rect(WINDOW_WIDTH // 2 - 180, WINDOW_HEIGHT - 80, 100, 40)
+        self.pass_button = pygame.Rect(WINDOW_WIDTH // 2 - 60, WINDOW_HEIGHT - 80, 100, 40)
+        self.suggest_button = pygame.Rect(WINDOW_WIDTH // 2 + 60, WINDOW_HEIGHT - 80, 100, 40)
         
         # Skill card buttons (will be created dynamically)
         self.skill_card_buttons = []
@@ -166,10 +167,6 @@ class EnhancedFightGame:
             # Draw suit
             suit_text = self.font.render(card.suit.value, True, color)
             self.screen.blit(suit_text, (x + 5, y + 25))
-
-            # Highlight if selected
-            if card.selected:
-                pygame.draw.rect(self.screen, SELECTED_COLOR, (x, y, CARD_WIDTH, CARD_HEIGHT), 4)
         else:
             pygame.draw.rect(self.screen, CARD_BACK_COLOR, (x, y, CARD_WIDTH, CARD_HEIGHT))
 
@@ -209,6 +206,10 @@ class EnhancedFightGame:
         for i, card in enumerate(player.hand):
             x = start_x + i * (CARD_WIDTH + card_spacing)
             y = y_pos
+            
+            # Bump up selected cards by moving them up
+            if hasattr(card, 'selected') and card.selected:
+                y -= 20  # Bump up by 20 pixels
 
             self.draw_card(card, x, y, show_cards)
             if show_cards:
@@ -616,6 +617,7 @@ class EnhancedFightGame:
             mouse_pos = pygame.mouse.get_pos()
             self.draw_button(self.play_button, "Play", self.play_button.collidepoint(mouse_pos))
             self.draw_button(self.pass_button, "Pass", self.pass_button.collidepoint(mouse_pos))
+            self.draw_button(self.suggest_button, "Suggest", self.suggest_button.collidepoint(mouse_pos))
 
         # Draw game over
         if self.game_over:
@@ -672,6 +674,8 @@ class EnhancedFightGame:
 
                             elif self.pass_button.collidepoint(mouse_pos):
                                 self.pass_turn()
+                            elif self.suggest_button.collidepoint(mouse_pos):
+                                self.suggest_best_play()
 
             # AI turn
             self.ai_turn()
@@ -684,4 +688,79 @@ class EnhancedFightGame:
             pygame.display.flip()
             self.clock.tick(FPS)
 
-        return self.winner 
+        return self.winner
+    
+    def suggest_best_play(self):
+        """Suggest the best play for the current player"""
+        if self.current_player != self.player:
+            return
+        
+        # Clear any current selection
+        for card in self.player.hand:
+            if hasattr(card, 'selected'):
+                card.selected = False
+        
+        # Find all valid plays
+        valid_plays = self.player.find_valid_plays(self.last_combo)
+        
+        if not valid_plays:
+            return  # No valid plays, player must pass
+        
+        # Choose the best play using smart logic
+        best_play = self.choose_best_play_for_suggestion(valid_plays)
+        
+        if best_play:
+            # Select the cards in the best play
+            for card in best_play.cards:
+                card.selected = True
+    
+    def choose_best_play_for_suggestion(self, valid_plays):
+        """Choose the best play from valid options for suggestion"""
+        if not valid_plays:
+            return None
+        
+        if len(valid_plays) == 1:
+            return valid_plays[0]
+        
+        # Strategy: 
+        # 1. If we need to beat a combo, prefer the minimal winning play
+        # 2. If we're starting a new round, prefer larger/stronger combos
+        # 3. Consider hand size - if opponent has few cards, play defensively
+        
+        ai_hand_size = len(self.ai.hand) if hasattr(self.ai, 'hand') else 13
+        player_hand_size = len(self.player.hand)
+        
+        if self.last_combo is not None:
+            # We need to beat an existing combo - choose minimal winning play
+            beating_plays = [play for play in valid_plays if play.can_beat(self.last_combo)]
+            if beating_plays:
+                # Choose the play with least cards, then lowest lead value
+                best_play = min(beating_plays, key=lambda p: (len(p.cards), p.lead_value))
+                return best_play
+            else:
+                # No plays can beat the last combo, suggest passing (return None)
+                return None
+        else:
+            # Starting a new round - choose strategically
+            if ai_hand_size <= 3:
+                # Opponent is close to winning, play aggressively
+                # Choose the largest combo to dump more cards
+                best_play = max(valid_plays, key=lambda p: len(p.cards))
+                return best_play
+            elif player_hand_size <= 5:
+                # We're close to winning, try to play our strongest cards
+                # Choose combo with highest lead value
+                best_play = max(valid_plays, key=lambda p: p.lead_value)
+                return best_play
+            else:
+                # Mid-game, balanced strategy
+                # Prefer combos that use more cards but aren't too weak
+                scored_plays = []
+                for play in valid_plays:
+                    # Score based on: cards used (good) + lead value (good)
+                    score = len(play.cards) * 2 + (play.lead_value - 3) * 0.1
+                    scored_plays.append((score, play))
+                
+                # Return the highest scoring play
+                best_play = max(scored_plays, key=lambda x: x[0])[1]
+                return best_play 
