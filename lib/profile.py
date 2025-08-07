@@ -2,7 +2,7 @@ import json
 import os
 from dataclasses import dataclass, field, asdict
 from typing import List, Set, Dict, Any
-from lib.card import Rarity, EquipmentTier
+from lib.core_types import Rarity, EquipmentTier
 
 
 @dataclass

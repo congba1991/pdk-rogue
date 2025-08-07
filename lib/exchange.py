@@ -2,7 +2,7 @@ from typing import List, Optional, Tuple
 import random
 from lib.skill_cards import SkillCard, get_skill_card, get_all_skill_cards
 from lib.items import Item, get_item, get_all_items
-from lib.card import Rarity
+from lib.core_types import Rarity
 
 
 class ExchangeNode:

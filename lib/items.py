@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import List, Optional, Any
-from lib.card import Rarity
+from lib.core_types import Rarity
 
 
 @dataclass

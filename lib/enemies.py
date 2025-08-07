@@ -8,7 +8,7 @@ from lib.player import FightPlayer, SmartAIPlayer
 from lib.skill_cards import SkillCard, get_skill_card
 from lib.items import Item, get_item
 from lib.combo import ComboType
-from lib.card import Card
+from lib.core_types import Card
 
 
 class EnemyType(Enum):

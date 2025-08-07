@@ -1,7 +1,8 @@
 import pygame
 import random
 from lib.constants import *
-from lib.card import Card, Suit
+from lib.core_types import Card, Suit
+from lib.ui_utils import UIUtils
 from lib.combo import identify_combo
 from lib.player import FightPlayer, SmartAIPlayer
 from lib.enemies import Enemy, EnemyType, get_enemy
@@ -82,9 +83,10 @@ class EnhancedFightGame:
                     equipment.on_equip(self)
 
         # UI elements
-        self.play_button = pygame.Rect(WINDOW_WIDTH // 2 - 180, WINDOW_HEIGHT - 80, 100, 40)
-        self.pass_button = pygame.Rect(WINDOW_WIDTH // 2 - 60, WINDOW_HEIGHT - 80, 100, 40)
-        self.suggest_button = pygame.Rect(WINDOW_WIDTH // 2 + 60, WINDOW_HEIGHT - 80, 100, 40)
+        button_y = WINDOW_HEIGHT - 80
+        self.play_button = pygame.Rect(WINDOW_WIDTH // 2 - 180, button_y, SMALL_BUTTON_WIDTH, BUTTON_HEIGHT)
+        self.pass_button = pygame.Rect(WINDOW_WIDTH // 2 - 60, button_y, SMALL_BUTTON_WIDTH, BUTTON_HEIGHT)
+        self.suggest_button = pygame.Rect(WINDOW_WIDTH // 2 + 60, button_y, SMALL_BUTTON_WIDTH, BUTTON_HEIGHT)
         
         # Skill card buttons (will be created dynamically)
         self.skill_card_buttons = []
@@ -179,7 +181,7 @@ class EnhancedFightGame:
             
         # Calculate spacing to keep cards in a single line with overlap
         # Leave some margin on each side
-        margin = 100
+        margin = CARD_MARGIN
         available_width = WINDOW_WIDTH - 2 * margin
         
         # Allow cards to overlap - use negative spacing if needed
@@ -190,8 +192,8 @@ class EnhancedFightGame:
                 # Need overlap - calculate negative spacing
                 overlap_needed = total_card_width - available_width
                 card_spacing = -(overlap_needed // (num_cards - 1))
-                # Ensure we don't overlap too much (keep at least 20px visible per card)
-                card_spacing = max(card_spacing, -(CARD_WIDTH - 20))
+                # Ensure we don't overlap too much (keep at least minimum visible per card)
+                card_spacing = max(card_spacing, -(CARD_WIDTH - CARD_OVERLAP_MIN))
             else:
                 # No overlap needed - use positive spacing
                 card_spacing = (available_width - total_card_width) // (num_cards - 1)
@@ -209,23 +211,15 @@ class EnhancedFightGame:
             
             # Bump up selected cards by moving them up
             if hasattr(card, 'selected') and card.selected:
-                y -= 20  # Bump up by 20 pixels
+                y -= CARD_BUMP_OFFSET
 
             self.draw_card(card, x, y, show_cards)
             if show_cards:
                 self.player_card_rects.append((card, pygame.Rect(x, y, CARD_WIDTH, CARD_HEIGHT)))
 
     def draw_button(self, rect, text, hover=False, disabled=False):
-        color = BUTTON_HOVER if hover else BUTTON_COLOR
-        if disabled:
-            color = (100, 100, 100)
-            
-        pygame.draw.rect(self.screen, color, rect)
-        pygame.draw.rect(self.screen, TEXT_COLOR, rect, 2)
-        
-        text_surface = self.font.render(text, True, TEXT_COLOR if not disabled else (150, 150, 150))
-        text_rect = text_surface.get_rect(center=rect.center)
-        self.screen.blit(text_surface, text_rect)
+        """Draw button using centralized UI utilities"""
+        UIUtils.draw_button(self.screen, self.font, rect, text, hover, disabled)
 
     def draw_skill_cards(self):
         """Draw skill card images"""
@@ -234,7 +228,7 @@ class EnhancedFightGame:
             
         # Draw skill cards section
         skill_title = self.small_font.render("Skill Cards:", True, TEXT_COLOR)
-        self.screen.blit(skill_title, (WINDOW_WIDTH - 200, 100))
+        self.screen.blit(skill_title, (WINDOW_WIDTH - SKILL_CARD_PANEL_WIDTH, 100))
         
         self.skill_card_buttons = []
         mouse_pos = pygame.mouse.get_pos()
@@ -244,7 +238,7 @@ class EnhancedFightGame:
         card_width = 80
         card_height = 100
         card_spacing = 5
-        start_x = WINDOW_WIDTH - 200
+        start_x = WINDOW_WIDTH - SKILL_CARD_PANEL_WIDTH
         start_y = 130
         
         for i, skill_card in enumerate(self.player_skill_cards):

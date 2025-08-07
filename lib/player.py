@@ -4,7 +4,7 @@ __all__ = [
     'SmartAIPlayer',
 ]
 
-from lib.card import Card
+from lib.core_types import Card
 from lib.combo import identify_combo, ComboType
 from collections import defaultdict
 import itertools

@@ -1,10 +1,11 @@
 import pygame
 import sys
 from lib.constants import *
+from lib.core_types import Card, Suit
+from lib.ui_utils import UIUtils
 from lib.profile import ProfileManager, Profile
 from lib.run_system import RunManager
 from lib.enhanced_game import EnhancedFightGame
-from lib.card import Card, Suit
 from lib.player import FightPlayer
 from lib.skill_cards import get_random_skill_cards, get_skill_card, load_skill_card_image
 from lib.equipment import get_all_equipment, get_equipment
@@ -31,31 +32,29 @@ class MainMenu:
         self.typing = False
         
         # Menu buttons
-        button_width = 200
-        button_height = 50
-        center_x = WINDOW_WIDTH // 2 - button_width // 2
+        center_x = WINDOW_WIDTH // 2 - BUTTON_WIDTH // 2
         
         # Main menu buttons
-        self.new_profile_button = pygame.Rect(center_x, 250, button_width, button_height)
-        self.load_profile_button = pygame.Rect(center_x, 320, button_width, button_height)
-        self.quit_button = pygame.Rect(center_x, 390, button_width, button_height)
+        self.new_profile_button = pygame.Rect(center_x, 250, BUTTON_WIDTH, BUTTON_HEIGHT + 10)
+        self.load_profile_button = pygame.Rect(center_x, 320, BUTTON_WIDTH, BUTTON_HEIGHT + 10)
+        self.quit_button = pygame.Rect(center_x, 390, BUTTON_WIDTH, BUTTON_HEIGHT + 10)
         
         # Profile selection buttons
-        self.back_button = pygame.Rect(50, WINDOW_HEIGHT - 80, 100, 40)
-        self.delete_button = pygame.Rect(WINDOW_WIDTH - 150, WINDOW_HEIGHT - 80, 100, 40)
+        self.back_button = pygame.Rect(50, WINDOW_HEIGHT - 80, SMALL_BUTTON_WIDTH, BUTTON_HEIGHT)
+        self.delete_button = pygame.Rect(WINDOW_WIDTH - 150, WINDOW_HEIGHT - 80, SMALL_BUTTON_WIDTH, BUTTON_HEIGHT)
         
         # Create profile input
-        self.name_input_rect = pygame.Rect(center_x, 300, button_width, button_height)
-        self.create_button = pygame.Rect(center_x, 370, button_width, button_height)
-        self.cancel_button = pygame.Rect(center_x, 440, button_width, button_height)
+        self.name_input_rect = pygame.Rect(center_x, 300, BUTTON_WIDTH, BUTTON_HEIGHT + 10)
+        self.create_button = pygame.Rect(center_x, 370, BUTTON_WIDTH, BUTTON_HEIGHT + 10)
+        self.cancel_button = pygame.Rect(center_x, 440, BUTTON_WIDTH, BUTTON_HEIGHT + 10)
         
         # Region selection
         self.region_buttons = []
-        self.start_run_button = pygame.Rect(center_x, WINDOW_HEIGHT - 120, button_width, button_height)
+        self.start_run_button = pygame.Rect(center_x, WINDOW_HEIGHT - 120, BUTTON_WIDTH, BUTTON_HEIGHT + 10)
         
         # Pre-fight buttons
-        self.fight_button = pygame.Rect(center_x, 400, button_width, button_height)
-        self.give_up_button = pygame.Rect(center_x, 470, button_width, button_height)
+        self.fight_button = pygame.Rect(center_x, 400, BUTTON_WIDTH, BUTTON_HEIGHT + 10)
+        self.give_up_button = pygame.Rect(center_x, 470, BUTTON_WIDTH, BUTTON_HEIGHT + 10)
         
         # Pre-fight card preview
         self.preview_player = None
@@ -68,24 +67,15 @@ class MainMenu:
         # Equipment selection
         self.equipment_buttons = []
         self.selected_equipment = []
-        self.confirm_equipment_button = pygame.Rect(center_x, WINDOW_HEIGHT - 80, button_width, button_height)
+        self.confirm_equipment_button = pygame.Rect(center_x, WINDOW_HEIGHT - 80, BUTTON_WIDTH, BUTTON_HEIGHT)
         
         # Map system
         self.current_map = None
         self.map_renderer = MapRenderer()
         
     def draw_button(self, rect, text, hover=False, disabled=False):
-        """Draw a button with hover effects"""
-        color = BUTTON_HOVER if hover else BUTTON_COLOR
-        if disabled:
-            color = (100, 100, 100)  # Gray for disabled
-            
-        pygame.draw.rect(self.screen, color, rect)
-        pygame.draw.rect(self.screen, TEXT_COLOR, rect, 2)
-        
-        text_surface = self.font.render(text, True, TEXT_COLOR if not disabled else (150, 150, 150))
-        text_rect = text_surface.get_rect(center=rect.center)
-        self.screen.blit(text_surface, text_rect)
+        """Draw button using centralized UI utilities"""
+        UIUtils.draw_button(self.screen, self.font, rect, text, hover, disabled)
         
     def draw_card(self, card, x, y):
         """Draw a card at the specified position"""
