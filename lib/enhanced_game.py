@@ -16,8 +16,8 @@ class EnhancedFightGame:
                  player_skill_cards: List[str] = None,
                  player_items: List[str] = None,
                  player_equipment: List[str] = None,
-                 player_starting_hp: int = 10,
-                 ai_starting_hp: int = 10,
+                 player_starting_hp: int = 5,
+                 ai_starting_hp: int = 5,
                  enemy_type: EnemyType = EnemyType.REGULAR,
                  enemy_name: str = None,
                  region_modifiers: Dict[str, Any] = None,
@@ -56,7 +56,7 @@ class EnhancedFightGame:
         # Initialize starting HP
         self.player.hp = player_starting_hp
         # Enemy HP is set by its own max_hp, but can be overridden
-        if ai_starting_hp != 10:  # If non-default HP specified, use it
+        if ai_starting_hp != 5:  # If non-default HP specified, use it
             self.ai.hp = ai_starting_hp
             self.ai.max_hp = ai_starting_hp
 
@@ -438,26 +438,10 @@ class EnhancedFightGame:
         if self.last_combo and not combo.can_beat(self.last_combo):
             return False
 
-        # Apply damage bonus from items/equipment
+        # Store that a combo was played (for potential damage bonus tracking)
         if self.last_combo and combo.can_beat(self.last_combo):
-            damage = 1 + self.last_combo_damage_bonus
-            self.last_combo_damage_bonus = 0  # Reset bonus
-            
-            # Apply equipment damage modification
-            damage = self.deal_damage(damage)
-            
-            # Determine target (opponent)
-            target = self.ai if player == self.player else self.player
-            
-            # Apply damage multiplier for enemies
-            if player != self.player and hasattr(player, 'damage_multiplier'):
-                damage = int(damage * player.damage_multiplier)
-            
-            # Apply damage using enemy's take_damage method if available
-            if hasattr(target, 'take_damage'):
-                target.take_damage(damage)
-            else:
-                target.hp -= damage
+            # Reset damage bonus but don't apply damage here - damage only happens when passing
+            self.last_combo_damage_bonus = 0
 
         # Remove cards from hand
         for card in cards:
@@ -480,12 +464,21 @@ class EnhancedFightGame:
 
     def pass_turn(self):
         if self.last_player != self.current_player:
+            # Base damage for passing
             damage = 1
+            
+            # Apply damage bonus if there was one accumulated
+            damage += self.last_combo_damage_bonus
+            self.last_combo_damage_bonus = 0  # Reset bonus after applying
             
             # Apply equipment damage modification
             damage = self.take_damage(damage)
             
-            self.current_player.hp -= damage
+            # Apply damage using take_damage method if available
+            if hasattr(self.current_player, 'take_damage'):
+                self.current_player.take_damage(damage)
+            else:
+                self.current_player.hp -= damage
 
         # Switch turns
         self.current_player = self.ai if self.current_player == self.player else self.player

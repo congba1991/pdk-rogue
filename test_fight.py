@@ -19,8 +19,8 @@ class TestFightConfig:
         self.selected_skill_cards = []
         self.selected_items = []
         self.selected_equipment = []
-        self.player_starting_hp = 10
-        self.ai_starting_hp = 10
+        self.player_starting_hp = 5
+        self.ai_starting_hp = 5
         self.region = "Tutorial"
         self.enemy_type = EnemyType.REGULAR
         self.enemy_name = None

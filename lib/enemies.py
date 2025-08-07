@@ -131,7 +131,7 @@ class Enemy(SmartAIPlayer):
     def __init__(self, 
                  name: str, 
                  enemy_type: EnemyType,
-                 max_hp: int = 10,
+                 max_hp: int = 5,
                  play_style: PlayStyle = PlayStyle.BALANCED,
                  skill_cards: List[str] = None,
                  items: List[str] = None,
@@ -288,7 +288,7 @@ def create_goblin_scout() -> Enemy:
     return Enemy(
         name="Goblin Scout",
         enemy_type=EnemyType.REGULAR,
-        max_hp=8,
+        max_hp=5,
         play_style=PlayStyle.AGGRESSIVE
     )
 
@@ -298,7 +298,7 @@ def create_orc_warrior() -> Enemy:
     return Enemy(
         name="Orc Warrior",
         enemy_type=EnemyType.REGULAR,
-        max_hp=12,
+        max_hp=5,
         play_style=PlayStyle.DEFENSIVE
     )
 
@@ -308,7 +308,7 @@ def create_bandit_leader() -> Enemy:
     return Enemy(
         name="Bandit Leader",
         enemy_type=EnemyType.ELITE,
-        max_hp=15,
+        max_hp=7,
         play_style=PlayStyle.BALANCED,
         skill_cards=["Card Steal", "Discard Grab"],
         abilities=[RegenerateAbility(1)]
@@ -320,7 +320,7 @@ def create_shadow_assassin() -> Enemy:
     return Enemy(
         name="Shadow Assassin",
         enemy_type=EnemyType.ELITE,
-        max_hp=12,
+        max_hp=7,
         play_style=PlayStyle.COMBO_FOCUSED,
         skill_cards=["Time Warp", "Damage Boost"],
         items=["Lucky Charm"]
@@ -332,7 +332,7 @@ def create_flame_elemental() -> Enemy:
     return Enemy(
         name="Flame Elemental",
         enemy_type=EnemyType.ELITE,
-        max_hp=14,
+        max_hp=7,
         play_style=PlayStyle.AGGRESSIVE,
         abilities=[DoubleDamageAbility()]
     )
@@ -345,7 +345,7 @@ def create_combo_bane_boss() -> Enemy:
     return Enemy(
         name="Combo Bane",
         enemy_type=EnemyType.BOSS,
-        max_hp=25,
+        max_hp=9,
         play_style=PlayStyle.DEFENSIVE,
         skill_cards=["Time Warp", "Card Steal", "Damage Boost"],
         abilities=[BanComboAbility(banned_combos)]
@@ -362,7 +362,7 @@ def create_arcane_overlord() -> Enemy:
     return Enemy(
         name="Arcane Overlord",
         enemy_type=EnemyType.BOSS,
-        max_hp=30,
+        max_hp=9,
         play_style=PlayStyle.BALANCED,
         skill_cards=["Time Warp", "Discard Grab"],
         items=["Scrying Orb", "Lucky Charm"],
@@ -375,7 +375,7 @@ def create_shadow_lord() -> Enemy:
     return Enemy(
         name="Shadow Lord",
         enemy_type=EnemyType.BOSS,
-        max_hp=35,
+        max_hp=9,
         play_style=PlayStyle.COMBO_FOCUSED,
         skill_cards=["Time Warp", "Card Steal", "Damage Boost", "Discard Grab"],
         items=["Scrying Orb"],
