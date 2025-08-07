@@ -674,12 +674,13 @@ class MainMenu:
         if result and result.name == "Player":
             # Player won - show reward screen
             self.run_manager.end_fight(True)
-            self.show_victory_rewards()
+            # If there is a reward, show it; else show return to map button
+            if self.run_manager.run_state.can_add_skill_card():
+                self.show_victory_rewards()
         else:
-            # Player lost - continue normally
+            # Player lost - show return to map button
             self.run_manager.end_fight(False)
             self.profile_manager.save_profile(self.current_profile)
-            self.check_run_status_and_continue()
         
     def give_up_fight(self):
         """Give up current fight, lose 1 LP"""
@@ -840,6 +841,11 @@ class MainMenu:
             # Handle exchange node interactions
             self.handle_exchange_clicks(pos)
                 
+        elif self.state == "fight_over":
+            if hasattr(self, 'return_to_map_button') and self.return_to_map_button.collidepoint(pos):
+                self.check_run_status_and_continue()
+                return
+
     def handle_keydown(self, event):
         """Handle keyboard input"""
         if self.state == "create_profile" and self.typing:
@@ -1088,12 +1094,3 @@ class MainMenu:
                     self.current_map.complete_current_node()
                     self.state = "map_view"
                 return
-
-
-if __name__ == "__main__":
-    pygame.init()
-    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-    pygame.display.set_caption("PDK Rogue")
-    
-    menu = MainMenu(screen)
-    menu.run() 

@@ -605,12 +605,17 @@ class EnhancedFightGame:
             self.draw_button(self.play_button, "Play", self.play_button.collidepoint(mouse_pos))
             self.draw_button(self.pass_button, "Pass", self.pass_button.collidepoint(mouse_pos))
             self.draw_button(self.suggest_button, "Suggest", self.suggest_button.collidepoint(mouse_pos))
-
         # Draw game over
         if self.game_over:
             winner_text = self.big_font.render(f"{self.winner.name} Wins!", True, CARD_COLOR)
             text_rect = winner_text.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 100))
             self.screen.blit(winner_text, text_rect)
+            # Show 'Back to Map' button if player lost
+            if self.winner != self.player:
+                button_rect = pygame.Rect(WINDOW_WIDTH // 2 - BUTTON_WIDTH // 2, WINDOW_HEIGHT // 2, BUTTON_WIDTH, BUTTON_HEIGHT)
+                mouse_pos = pygame.mouse.get_pos()
+                self.draw_button(button_rect, "Back to Map", button_rect.collidepoint(mouse_pos))
+                self.back_to_map_button = button_rect
 
         # Card count
         player_count = self.font.render(f"Cards: {len(self.player.hand)}", True, CARD_COLOR)
@@ -622,13 +627,22 @@ class EnhancedFightGame:
         running = True
 
         while running:
+            # If game over and player won, just exit
+            if self.game_over and self.winner == self.player:
+                running = False
+                continue
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:  # Left click
                         mouse_pos = pygame.mouse.get_pos()
+
+                        # If game over and player lost, handle Back to Map button
+                        if self.game_over and self.winner != self.player and hasattr(self, 'back_to_map_button'):
+                            if self.back_to_map_button.collidepoint(mouse_pos):
+                                running = False
+                                continue
 
                         # Check card clicks
                         self.handle_card_click(mouse_pos)
@@ -750,4 +764,4 @@ class EnhancedFightGame:
                 
                 # Return the highest scoring play
                 best_play = max(scored_plays, key=lambda x: x[0])[1]
-                return best_play 
+                return best_play
