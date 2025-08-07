@@ -121,12 +121,98 @@ class StraightBonus(Item):
         return False
 
 
+class AncientRelic(Item):
+    """Start each fight with +2 HP"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Ancient Relic",
+            rarity=Rarity.RARE,
+            description="Start each fight with +2 HP",
+            item_type="Passive"
+        )
+    
+    def on_trigger(self, game_state: Any, trigger_type: str) -> bool:
+        if trigger_type == "fight_start":
+            game_state.player.hp += 2
+            return True
+        return False
+
+
+class VampiricsGauntlets(Item):
+    """All damage you deal heals you for 1 HP"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Vampiric Gauntlets",
+            rarity=Rarity.RARE,
+            description="All damage you deal heals you for 1 HP",
+            item_type="Passive"
+        )
+    
+    def on_trigger(self, game_state: Any, trigger_type: str) -> bool:
+        if trigger_type == "damage_dealt":
+            game_state.player.hp = min(
+                game_state.player.hp + 1,
+                game_state.player.max_hp
+            )
+            return True
+        return False
+
+
+class MasterThief(Item):
+    """At start of each fight, steal 2 random cards from opponent"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Master Thief",
+            rarity=Rarity.RARE,
+            description="At start of each fight, steal 2 random cards from opponent",
+            item_type="Passive"
+        )
+    
+    def on_trigger(self, game_state: Any, trigger_type: str) -> bool:
+        if trigger_type == "fight_start":
+            import random
+            if hasattr(game_state, 'ai') and len(game_state.ai.hand) >= 2:
+                stolen_cards = random.sample(game_state.ai.hand, 2)
+                for card in stolen_cards:
+                    game_state.player.hand.append(card)
+                    game_state.ai.hand.remove(card)
+                return True
+        return False
+
+
+class CrystalBall(Item):
+    """See opponent's hand at start of each fight"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Crystal Ball",
+            rarity=Rarity.RARE,
+            description="See opponent's hand at start of each fight",
+            item_type="Passive"
+        )
+    
+    def on_trigger(self, game_state: Any, trigger_type: str) -> bool:
+        if trigger_type == "fight_start":
+            # In a real implementation, this would show UI
+            if hasattr(game_state, 'ai') and hasattr(game_state.ai, 'hand'):
+                print(f"Crystal Ball reveals opponent's hand: {[str(card) for card in game_state.ai.hand]}")
+            return True
+        return False
+
+
 # Registry of all items
 ITEMS = {
     "Lucky Charm": LuckyCharm,
     "Momentum Token": MomentumToken,
     "Scrying Orb": ScryingOrb,
     "Straight Bonus": StraightBonus,
+    "Ancient Relic": AncientRelic,
+    "Vampiric Gauntlets": VampiricsGauntlets,
+    "Master Thief": MasterThief,
+    "Crystal Ball": CrystalBall,
 }
 
 

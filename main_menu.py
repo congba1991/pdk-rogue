@@ -10,6 +10,7 @@ from lib.skill_cards import get_random_skill_cards, get_skill_card, load_skill_c
 from lib.equipment import get_all_equipment, get_equipment
 from lib.map_system import MapGenerator, MapRenderer, RegionMap, NodeType
 from lib.enemies import EnemyType
+from lib.exchange import ExchangeNode
 import random
 
 
@@ -22,7 +23,7 @@ class MainMenu:
         self.profile_manager = ProfileManager()
         
         # Menu states
-        self.state = "main"  # "main", "profile_select", "create_profile", "region_select", "equipment_select", "map_view", "pre_fight", "reward_select"
+        self.state = "main"  # "main", "profile_select", "create_profile", "region_select", "equipment_select", "map_view", "pre_fight", "reward_select", "exchange"
         self.current_profile = None
         self.selected_profile = None
         self.selected_region = None
@@ -807,8 +808,11 @@ class MainMenu:
                             self.create_preview_deck()
                             self.state = "pre_fight"
                         elif clicked_node.node_type == NodeType.EXCHANGE:
-                            # TODO: Implement exchange mechanics
-                            self.current_map.complete_current_node()
+                            # Enter exchange node
+                            self.exchange_node = ExchangeNode()
+                            self.selected_exchange_items = []
+                            self.exchange_type = None  # "cards" or "items"
+                            self.state = "exchange"
                         elif clicked_node.node_type == NodeType.MYSTERY:
                             # TODO: Implement mystery encounter mechanics  
                             self.current_map.complete_current_node()
@@ -841,6 +845,10 @@ class MainMenu:
                         # Remove the clicked card
                         self.run_manager.run_state.remove_skill_card(card.name)
                         return
+                
+        elif self.state == "exchange":
+            # Handle exchange node interactions
+            self.handle_exchange_clicks(pos)
                 
     def handle_keydown(self, event):
         """Handle keyboard input"""
@@ -875,6 +883,8 @@ class MainMenu:
             self.draw_pre_fight()
         elif self.state == "reward_select":
             self.draw_reward_select()
+        elif self.state == "exchange":
+            self.draw_exchange()
         
     def run(self):
         """Main menu loop"""
@@ -893,6 +903,201 @@ class MainMenu:
             self.draw()
             pygame.display.flip()
             self.clock.tick(FPS)
+    
+    def draw_exchange(self):
+        """Draw the exchange node interface"""
+        self.screen.fill(BG_COLOR)
+        
+        # Title
+        title = self.font.render("Exchange Node", True, TEXT_COLOR)
+        title_rect = title.get_rect(center=(WINDOW_WIDTH // 2, 50))
+        self.screen.blit(title, title_rect)
+        
+        # Description
+        desc_text = "Trade 2 cards for 1 rare card, or 2 items for 1 rare item"
+        desc_surface = self.small_font.render(desc_text, True, TEXT_COLOR)
+        desc_rect = desc_surface.get_rect(center=(WINDOW_WIDTH // 2, 80))
+        self.screen.blit(desc_surface, desc_rect)
+        
+        mouse_pos = pygame.mouse.get_pos()
+        
+        # Get exchange options
+        player_skill_cards = self.run_manager.run_state.get_skill_card_names()
+        player_items = self.run_manager.run_state.get_item_names()
+        can_exchange_cards, can_exchange_items = self.exchange_node.get_exchange_options(player_skill_cards, player_items)
+        
+        y_pos = 120
+        
+        if can_exchange_cards:
+            # Skill Cards Exchange Section
+            section_title = self.font.render("Exchange Skill Cards (Select 2):", True, TEXT_COLOR)
+            self.screen.blit(section_title, (50, y_pos))
+            y_pos += 40
+            
+            # Display player's skill cards
+            for i, card_name in enumerate(player_skill_cards):
+                x_pos = 70 + (i % 3) * 250
+                row_y = y_pos + (i // 3) * 30
+                
+                # Create selection rect
+                card_rect = pygame.Rect(x_pos, row_y, 230, 25)
+                selected = card_name in self.selected_exchange_items
+                
+                # Draw selection box
+                color = SELECTED_COLOR if selected else CARD_COLOR
+                if card_rect.collidepoint(mouse_pos):
+                    color = BUTTON_HOVER
+                
+                pygame.draw.rect(self.screen, color, card_rect)
+                pygame.draw.rect(self.screen, TEXT_COLOR, card_rect, 2)
+                
+                # Draw card name
+                text = self.small_font.render(card_name, True, TEXT_COLOR)
+                text_rect = text.get_rect(midleft=(card_rect.x + 10, card_rect.centery))
+                self.screen.blit(text, text_rect)
+                
+                # Store rect for click detection
+                if not hasattr(self, 'exchange_card_rects'):
+                    self.exchange_card_rects = {}
+                self.exchange_card_rects[card_name] = card_rect
+            
+            y_pos += ((len(player_skill_cards) - 1) // 3 + 1) * 30 + 20
+            
+            # Exchange button for cards
+            exchange_cards_button = pygame.Rect(WINDOW_WIDTH // 2 - 100, y_pos, 200, 40)
+            can_exchange = len(self.selected_exchange_items) == 2 and self.exchange_type == "cards"
+            self.draw_button(exchange_cards_button, "Exchange for Rare Card", 
+                           exchange_cards_button.collidepoint(mouse_pos), not can_exchange)
+            self.exchange_cards_button = exchange_cards_button
+            y_pos += 60
+        
+        if can_exchange_items:
+            # Items Exchange Section
+            section_title = self.font.render("Exchange Items (Select 2):", True, TEXT_COLOR)
+            self.screen.blit(section_title, (50, y_pos))
+            y_pos += 40
+            
+            # Display player's items
+            for i, item_name in enumerate(player_items):
+                x_pos = 70 + (i % 3) * 250
+                row_y = y_pos + (i // 3) * 30
+                
+                # Create selection rect
+                item_rect = pygame.Rect(x_pos, row_y, 230, 25)
+                selected = item_name in self.selected_exchange_items
+                
+                # Draw selection box
+                color = SELECTED_COLOR if selected else CARD_COLOR
+                if item_rect.collidepoint(mouse_pos):
+                    color = BUTTON_HOVER
+                
+                pygame.draw.rect(self.screen, color, item_rect)
+                pygame.draw.rect(self.screen, TEXT_COLOR, item_rect, 2)
+                
+                # Draw item name
+                text = self.small_font.render(item_name, True, TEXT_COLOR)
+                text_rect = text.get_rect(midleft=(item_rect.x + 10, item_rect.centery))
+                self.screen.blit(text, text_rect)
+                
+                # Store rect for click detection
+                if not hasattr(self, 'exchange_item_rects'):
+                    self.exchange_item_rects = {}
+                self.exchange_item_rects[item_name] = item_rect
+            
+            y_pos += ((len(player_items) - 1) // 3 + 1) * 30 + 20
+            
+            # Exchange button for items
+            exchange_items_button = pygame.Rect(WINDOW_WIDTH // 2 - 100, y_pos, 200, 40)
+            can_exchange = len(self.selected_exchange_items) == 2 and self.exchange_type == "items"
+            self.draw_button(exchange_items_button, "Exchange for Rare Item", 
+                           exchange_items_button.collidepoint(mouse_pos), not can_exchange)
+            self.exchange_items_button = exchange_items_button
+            y_pos += 60
+        
+        if not can_exchange_cards and not can_exchange_items:
+            # No exchange options available
+            no_exchange_text = "No exchange options available (need 2+ cards/items and rare options must exist)"
+            no_exchange_surface = self.small_font.render(no_exchange_text, True, TEXT_COLOR)
+            no_exchange_rect = no_exchange_surface.get_rect(center=(WINDOW_WIDTH // 2, 200))
+            self.screen.blit(no_exchange_surface, no_exchange_rect)
+        
+        # Back button
+        back_button = pygame.Rect(50, WINDOW_HEIGHT - 80, 100, 40)
+        self.draw_button(back_button, "Leave", back_button.collidepoint(mouse_pos))
+        self.exchange_back_button = back_button
+    
+    def handle_exchange_clicks(self, pos):
+        """Handle clicks in the exchange interface"""
+        # Back button
+        if hasattr(self, 'exchange_back_button') and self.exchange_back_button.collidepoint(pos):
+            # Mark exchange node as completed and return to map
+            self.current_map.complete_current_node()
+            self.state = "map_view"
+            return
+        
+        player_skill_cards = self.run_manager.run_state.get_skill_card_names()
+        player_items = self.run_manager.run_state.get_item_names()
+        
+        # Handle skill card selection
+        if hasattr(self, 'exchange_card_rects'):
+            for card_name, rect in self.exchange_card_rects.items():
+                if rect.collidepoint(pos):
+                    if card_name in self.selected_exchange_items:
+                        # Deselect
+                        self.selected_exchange_items.remove(card_name)
+                        if not self.selected_exchange_items:
+                            self.exchange_type = None
+                    elif len(self.selected_exchange_items) < 2:
+                        # Select (but only if we're not already in items mode)
+                        if self.exchange_type != "items":
+                            self.selected_exchange_items.append(card_name)
+                            self.exchange_type = "cards"
+                    return
+        
+        # Handle item selection
+        if hasattr(self, 'exchange_item_rects'):
+            for item_name, rect in self.exchange_item_rects.items():
+                if rect.collidepoint(pos):
+                    if item_name in self.selected_exchange_items:
+                        # Deselect
+                        self.selected_exchange_items.remove(item_name)
+                        if not self.selected_exchange_items:
+                            self.exchange_type = None
+                    elif len(self.selected_exchange_items) < 2:
+                        # Select (but only if we're not already in cards mode)
+                        if self.exchange_type != "cards":
+                            self.selected_exchange_items.append(item_name)
+                            self.exchange_type = "items"
+                    return
+        
+        # Handle exchange buttons
+        if hasattr(self, 'exchange_cards_button') and self.exchange_cards_button.collidepoint(pos):
+            if len(self.selected_exchange_items) == 2 and self.exchange_type == "cards":
+                # Perform skill card exchange
+                rare_card = self.exchange_node.exchange_skill_cards(player_skill_cards, self.selected_exchange_items)
+                if rare_card:
+                    # Add the rare card to player's inventory
+                    self.run_manager.run_state.add_skill_card_instance(rare_card)
+                    # Save profile
+                    self.profile_manager.save_profile(self.current_profile)
+                    # Complete node and return to map
+                    self.current_map.complete_current_node()
+                    self.state = "map_view"
+                return
+        
+        if hasattr(self, 'exchange_items_button') and self.exchange_items_button.collidepoint(pos):
+            if len(self.selected_exchange_items) == 2 and self.exchange_type == "items":
+                # Perform item exchange
+                rare_item = self.exchange_node.exchange_items(player_items, self.selected_exchange_items)
+                if rare_item:
+                    # Add the rare item to player's inventory
+                    self.run_manager.run_state.add_item_instance(rare_item)
+                    # Save profile
+                    self.profile_manager.save_profile(self.current_profile)
+                    # Complete node and return to map
+                    self.current_map.complete_current_node()
+                    self.state = "map_view"
+                return
 
 
 if __name__ == "__main__":
