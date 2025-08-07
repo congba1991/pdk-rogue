@@ -4,6 +4,7 @@ from lib.constants import *
 from lib.card import Card, Suit
 from lib.combo import identify_combo
 from lib.player import FightPlayer, SmartAIPlayer
+from lib.enemies import Enemy, EnemyType, get_enemy
 from lib.skill_cards import get_skill_card, SkillCard, load_skill_card_image
 from lib.items import get_item, Item
 from lib.equipment import get_equipment, Equipment
@@ -17,6 +18,8 @@ class EnhancedFightGame:
                  player_equipment: List[str] = None,
                  player_starting_hp: int = 10,
                  ai_starting_hp: int = 10,
+                 enemy_type: EnemyType = EnemyType.REGULAR,
+                 enemy_name: str = None,
                  region_modifiers: Dict[str, Any] = None,
                  run_manager = None,
                  preview_player = None,
@@ -29,7 +32,7 @@ class EnhancedFightGame:
 
         # Initialize players
         self.player = FightPlayer("Player")
-        self.ai = SmartAIPlayer("AI")
+        self.ai = get_enemy(enemy_type, enemy_name)
         self.current_player = None
         self.last_combo = None
         self.last_player = None
@@ -52,7 +55,10 @@ class EnhancedFightGame:
         
         # Initialize starting HP
         self.player.hp = player_starting_hp
-        self.ai.hp = ai_starting_hp
+        # Enemy HP is set by its own max_hp, but can be overridden
+        if ai_starting_hp != 10:  # If non-default HP specified, use it
+            self.ai.hp = ai_starting_hp
+            self.ai.max_hp = ai_starting_hp
 
         # Load skill cards, items, and equipment
         if player_skill_cards:
@@ -141,6 +147,10 @@ class EnhancedFightGame:
         # Apply equipment effects at fight start
         for equipment in self.player_equipment:
             equipment.on_fight_start(self)
+            
+        # Initialize enemy abilities
+        if hasattr(self.ai, 'on_fight_start'):
+            self.ai.on_fight_start(self)
 
     def draw_card(self, card, x, y, show_face=True):
         # Draw card background
@@ -344,9 +354,28 @@ class EnhancedFightGame:
             self.screen.blit(fight_surface, (20, WINDOW_HEIGHT - 130))
             
         player_hp_text = self.font.render(hp_text, True, CARD_COLOR)
-        ai_hp_text = self.font.render(f"AI HP: {self.ai.hp}", True, CARD_COLOR)
+        
+        # Show enemy name and type
+        enemy_name = getattr(self.ai, 'name', 'AI')
+        enemy_type_str = ""
+        if hasattr(self.ai, 'enemy_type'):
+            enemy_type_str = f" ({self.ai.enemy_type.value.title()})"
+        ai_hp_text = self.font.render(f"{enemy_name}{enemy_type_str} HP: {self.ai.hp}", True, CARD_COLOR)
+        
         self.screen.blit(player_hp_text, (20, WINDOW_HEIGHT - 100))
         self.screen.blit(ai_hp_text, (20, 20))
+        
+        # Show enemy abilities if any
+        if hasattr(self.ai, 'abilities') and self.ai.abilities:
+            abilities_text = "Enemy Abilities: " + ", ".join(ability.name for ability in self.ai.abilities[:3])  # Show first 3
+            abilities_surface = self.small_font.render(abilities_text, True, CARD_COLOR)
+            self.screen.blit(abilities_surface, (20, 50))
+        
+        # Show banned combo types if any
+        if hasattr(self, 'banned_combo_types') and self.banned_combo_types:
+            banned_text = "Banned Combos: " + ", ".join(combo_type.name for combo_type in self.banned_combo_types)
+            banned_surface = self.small_font.render(banned_text, True, (255, 100, 100))  # Red text
+            self.screen.blit(banned_surface, (20, 75))
 
         # Draw last played combo as actual cards
         if self.last_combo:
@@ -400,6 +429,11 @@ class EnhancedFightGame:
         if not combo:
             return False
 
+        # Check if combo is banned (for boss abilities)
+        if player == self.player and hasattr(self, 'banned_combo_types'):
+            if combo.type in self.banned_combo_types:
+                return False
+
         if self.last_combo and not combo.can_beat(self.last_combo):
             return False
 
@@ -413,7 +447,16 @@ class EnhancedFightGame:
             
             # Determine target (opponent)
             target = self.ai if player == self.player else self.player
-            target.hp -= damage
+            
+            # Apply damage multiplier for enemies
+            if player != self.player and hasattr(player, 'damage_multiplier'):
+                damage = int(damage * player.damage_multiplier)
+            
+            # Apply damage using enemy's take_damage method if available
+            if hasattr(target, 'take_damage'):
+                target.take_damage(damage)
+            else:
+                target.hp -= damage
 
         # Remove cards from hand
         for card in cards:
@@ -538,15 +581,14 @@ class EnhancedFightGame:
         if self.current_player != self.ai or self.game_over:
             return
 
+        # Trigger enemy's turn start effects
+        if hasattr(self.ai, 'on_turn_start'):
+            self.ai.on_turn_start(self)
+
         # AI chooses play
         combo = self.ai.choose_play(
             self.last_combo,
-            {
-                "player_cards": len(self.player.hand),
-                "ai_cards": len(self.ai.hand),
-                "player_hp": self.player.hp,
-                "ai_hp": self.ai.hp,
-            },
+            self,  # Pass the game object instead of a dictionary
         )
         if combo:
             self.play_cards(self.ai, combo.cards)

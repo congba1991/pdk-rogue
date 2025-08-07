@@ -5,6 +5,7 @@ from lib.enhanced_game import EnhancedFightGame
 from lib.skill_cards import get_all_skill_cards, SKILL_CARDS
 from lib.items import get_all_items, ITEMS
 from lib.equipment import get_all_equipment, EQUIPMENT
+from lib.enemies import EnemyType, REGULAR_ENEMIES, ELITE_ENEMIES, BOSS_ENEMIES
 
 
 class TestFightConfig:
@@ -21,9 +22,11 @@ class TestFightConfig:
         self.player_starting_hp = 10
         self.ai_starting_hp = 10
         self.region = "Tutorial"
+        self.enemy_type = EnemyType.REGULAR
+        self.enemy_name = None
         
         # UI state
-        self.current_section = "main"  # main, skill_cards, items, equipment, stats
+        self.current_section = "main"  # main, skill_cards, items, equipment, stats, enemies
         self.scroll_offset = 0
         
         # Available options
@@ -76,10 +79,12 @@ class TestFightConfig:
         
         # Configuration summary
         y_pos = 100
+        enemy_display = self.enemy_name or f"Random {self.enemy_type.value.title()}"
         summary_items = [
             f"Region: {self.region}",
             f"Player HP: {self.player_starting_hp}",
             f"AI HP: {self.ai_starting_hp}",
+            f"Enemy: {enemy_display}",
             f"Skill Cards: {len(self.selected_skill_cards)}",
             f"Items: {len(self.selected_items)}",
             f"Equipment: {len(self.selected_equipment)}"
@@ -120,6 +125,13 @@ class TestFightConfig:
         stats_rect = pygame.Rect(center_x, y_pos, button_width, button_height)
         self.draw_button(stats_rect, "Configure Stats", 
                         stats_rect.collidepoint(mouse_pos))
+        y_pos += 50
+        
+        # Enemy button
+        enemy_display = self.enemy_name or f"Random {self.enemy_type.value.title()}"
+        enemy_rect = pygame.Rect(center_x, y_pos, button_width, button_height)
+        self.draw_button(enemy_rect, f"Configure Enemy ({enemy_display})", 
+                        enemy_rect.collidepoint(mouse_pos))
         
         # Start fight button
         can_start = len(self.selected_skill_cards) <= 5 and len(self.selected_items) <= 5
@@ -275,7 +287,9 @@ class TestFightConfig:
             player_items=self.selected_items,
             player_equipment=self.selected_equipment,
             player_starting_hp=self.player_starting_hp,
-            ai_starting_hp=self.ai_starting_hp
+            ai_starting_hp=self.ai_starting_hp,
+            enemy_type=self.enemy_type,
+            enemy_name=self.enemy_name
         )
         
         # Run the fight
@@ -296,6 +310,8 @@ class TestFightConfig:
             self.draw_equipment_selection()
         elif self.current_section == "stats":
             self.draw_stats_configuration()
+        elif self.current_section == "enemies":
+            self.draw_enemy_selection()
         
     def run(self):
         """Main configuration loop"""
@@ -342,6 +358,11 @@ class TestFightConfig:
                             stats_rect = pygame.Rect(center_x, 450, button_width, button_height)
                             if stats_rect.collidepoint(mouse_pos):
                                 self.current_section = "stats"
+                                
+                            # Enemy button
+                            enemy_rect = pygame.Rect(center_x, 500, button_width, button_height)
+                            if enemy_rect.collidepoint(mouse_pos):
+                                self.current_section = "enemies"
                                 
                             # Start fight button
                             if self.start_fight_button.collidepoint(mouse_pos):
@@ -437,12 +458,129 @@ class TestFightConfig:
                                     self.ai_starting_hp += 1
                                 elif self.back_button.collidepoint(mouse_pos):
                                     self.current_section = "main"
+                        
+                        # Handle enemy selection
+                        elif self.current_section == "enemies":
+                            button_width = 200
+                            button_height = 40
+                            center_x = WINDOW_WIDTH // 2 - button_width // 2
+                            
+                            # Enemy type buttons
+                            regular_rect = pygame.Rect(center_x, 120, button_width, button_height)
+                            elite_rect = pygame.Rect(center_x, 170, button_width, button_height) 
+                            boss_rect = pygame.Rect(center_x, 220, button_width, button_height)
+                            
+                            if regular_rect.collidepoint(mouse_pos):
+                                self.enemy_type = EnemyType.REGULAR
+                                self.enemy_name = None
+                            elif elite_rect.collidepoint(mouse_pos):
+                                self.enemy_type = EnemyType.ELITE
+                                self.enemy_name = None
+                            elif boss_rect.collidepoint(mouse_pos):
+                                self.enemy_type = EnemyType.BOSS
+                                self.enemy_name = None
+                            else:
+                                # Check specific enemy selections
+                                y_pos = 170
+                                if self.enemy_type == EnemyType.REGULAR:
+                                    for enemy_name in REGULAR_ENEMIES.keys():
+                                        enemy_rect = pygame.Rect(center_x + 20, y_pos, button_width - 40, 30)
+                                        if enemy_rect.collidepoint(mouse_pos):
+                                            self.enemy_name = enemy_name
+                                        y_pos += 35
+                                elif self.enemy_type == EnemyType.ELITE:
+                                    for enemy_name in ELITE_ENEMIES.keys():
+                                        enemy_rect = pygame.Rect(center_x + 20, y_pos, button_width - 40, 30)
+                                        if enemy_rect.collidepoint(mouse_pos):
+                                            self.enemy_name = enemy_name
+                                        y_pos += 35
+                                elif self.enemy_type == EnemyType.BOSS:
+                                    for enemy_name in BOSS_ENEMIES.keys():
+                                        enemy_rect = pygame.Rect(center_x + 20, y_pos, button_width - 40, 30)
+                                        if enemy_rect.collidepoint(mouse_pos):
+                                            self.enemy_name = enemy_name
+                                        y_pos += 35
+                            
+                            # Back button
+                            if self.back_button.collidepoint(mouse_pos):
+                                self.current_section = "main"
             
             self.draw()
             pygame.display.flip()
             self.clock.tick(FPS)
         
         pygame.quit()
+        
+    def draw_enemy_selection(self):
+        """Draw enemy selection screen"""
+        self.screen.fill(BG_COLOR)
+        
+        # Title
+        title = self.font.render("Select Enemy Type", True, TEXT_COLOR)
+        title_rect = title.get_rect(center=(WINDOW_WIDTH // 2, 30))
+        self.screen.blit(title, title_rect)
+        
+        # Current selection
+        current_text = f"Current: {self.enemy_type.value.title()}"
+        if self.enemy_name:
+            current_text += f" - {self.enemy_name}"
+        current_surface = self.font.render(current_text, True, TEXT_COLOR)
+        self.screen.blit(current_surface, (50, 80))
+        
+        # Enemy type buttons
+        y_pos = 120
+        button_width = 200
+        button_height = 40
+        center_x = WINDOW_WIDTH // 2 - button_width // 2
+        mouse_pos = pygame.mouse.get_pos()
+        
+        # Regular enemies
+        regular_rect = pygame.Rect(center_x, y_pos, button_width, button_height)
+        regular_selected = self.enemy_type == EnemyType.REGULAR
+        self.draw_button(regular_rect, "Regular Enemies", 
+                        regular_rect.collidepoint(mouse_pos) or regular_selected)
+        y_pos += 50
+        
+        if regular_selected:
+            for enemy_name in REGULAR_ENEMIES.keys():
+                enemy_rect = pygame.Rect(center_x + 20, y_pos, button_width - 40, 30)
+                selected = self.enemy_name == enemy_name
+                self.draw_button(enemy_rect, enemy_name, 
+                               enemy_rect.collidepoint(mouse_pos) or selected)
+                y_pos += 35
+        
+        # Elite enemies  
+        elite_rect = pygame.Rect(center_x, y_pos, button_width, button_height)
+        elite_selected = self.enemy_type == EnemyType.ELITE
+        self.draw_button(elite_rect, "Elite Enemies", 
+                        elite_rect.collidepoint(mouse_pos) or elite_selected)
+        y_pos += 50
+        
+        if elite_selected:
+            for enemy_name in ELITE_ENEMIES.keys():
+                enemy_rect = pygame.Rect(center_x + 20, y_pos, button_width - 40, 30)
+                selected = self.enemy_name == enemy_name
+                self.draw_button(enemy_rect, enemy_name, 
+                               enemy_rect.collidepoint(mouse_pos) or selected)
+                y_pos += 35
+        
+        # Boss enemies
+        boss_rect = pygame.Rect(center_x, y_pos, button_width, button_height)
+        boss_selected = self.enemy_type == EnemyType.BOSS
+        self.draw_button(boss_rect, "Boss Enemies", 
+                        boss_rect.collidepoint(mouse_pos) or boss_selected)
+        y_pos += 50
+        
+        if boss_selected:
+            for enemy_name in BOSS_ENEMIES.keys():
+                enemy_rect = pygame.Rect(center_x + 20, y_pos, button_width - 40, 30)
+                selected = self.enemy_name == enemy_name
+                self.draw_button(enemy_rect, enemy_name, 
+                               enemy_rect.collidepoint(mouse_pos) or selected)
+                y_pos += 35
+        
+        # Back button
+        self.draw_button(self.back_button, "Back", self.back_button.collidepoint(mouse_pos))
 
 
 if __name__ == "__main__":

@@ -191,8 +191,16 @@ class SmartAIPlayer(FightPlayer):
         # Always use Rust minimax if available
         if mcts_rust and hasattr(mcts_rust, 'minimax_search_py'):
             ai_hand_json = json.dumps([card_to_dict(c) for c in self.hand])
-            # Estimate opponent hand (fallback: same size, random cards)
-            opp_hand = [Card(c.rank, c.suit) for c in game_state.get('opponent_hand', [])] if 'opponent_hand' in game_state else [Card('3', '♦')]*len(self.hand)
+            # Handle both dictionary game_state (old) and game object (new)
+            if hasattr(game_state, 'player'):  # Game object
+                opp_hand = game_state.player.hand if hasattr(game_state, 'player') else []
+                ai_hp = getattr(self, 'hp', 10)
+                player_hp = getattr(game_state.player, 'hp', 10)
+            else:  # Dictionary game_state
+                opp_hand = [Card(c.rank, c.suit) for c in game_state.get('opponent_hand', [])] if 'opponent_hand' in game_state else []
+                ai_hp = game_state.get('ai_hp', 10)
+                player_hp = game_state.get('player_hp', 10)
+            
             if not opp_hand:
                 all_ranks = list(Card.VALUE_MAP.keys())
                 all_suits = list(set(c.suit for c in self.hand))
@@ -215,8 +223,8 @@ class SmartAIPlayer(FightPlayer):
                     ai_hand_json,
                     last_combo_json,
                     opp_hand_json,
-                    getattr(self, 'hp', 10),
-                    game_state.get('opponent_hp', 10),
+                    ai_hp,
+                    player_hp,
                     depth
                 )
                 if hasattr(result, 'unwrap'):

@@ -9,6 +9,7 @@ from lib.player import FightPlayer
 from lib.skill_cards import get_random_skill_cards, get_skill_card, load_skill_card_image
 from lib.equipment import get_all_equipment, get_equipment
 from lib.map_system import MapGenerator, MapRenderer, RegionMap, NodeType
+from lib.enemies import EnemyType
 import random
 
 
@@ -283,6 +284,22 @@ class MainMenu:
         lp_surface = self.font.render(lp_text, True, TEXT_COLOR)
         lp_rect = lp_surface.get_rect(center=(WINDOW_WIDTH // 2, 150))
         self.screen.blit(lp_surface, lp_rect)
+        
+        # Show enemy information
+        if self.current_map and self.current_map.current_node:
+            node_type = self.current_map.current_node.node_type
+            enemy_info = ""
+            if node_type == NodeType.COMBAT:
+                enemy_info = "Enemy: Regular - Standard opponent"
+            elif node_type == NodeType.ELITE:
+                enemy_info = "Enemy: Elite - Has skill cards and abilities"
+            elif node_type == NodeType.BOSS:
+                enemy_info = "Enemy: Boss - Powerful with unique mechanics"
+            
+            if enemy_info:
+                enemy_surface = self.small_font.render(enemy_info, True, TEXT_COLOR)
+                enemy_rect = enemy_surface.get_rect(center=(WINDOW_WIDTH // 2, 175))
+                self.screen.blit(enemy_surface, enemy_rect)
         
         # Show preview hand
         hand_label = self.small_font.render("Your hand:", True, TEXT_COLOR)
@@ -637,6 +654,16 @@ class MainMenu:
         unlocked_items = list(self.current_profile.unlocked_items)
         run_equipment = [eq.name for eq in self.run_manager.run_state.equipped_equipment]
         
+        # Determine enemy type based on current node
+        enemy_type = EnemyType.REGULAR  # Default
+        if self.current_map and self.current_map.current_node:
+            node_type = self.current_map.current_node.node_type
+            if node_type == NodeType.ELITE:
+                enemy_type = EnemyType.ELITE
+            elif node_type == NodeType.BOSS:
+                enemy_type = EnemyType.BOSS
+            # Combat and other nodes use regular enemies
+        
         # Start the enhanced combat game with pre-dealt cards
         combat_game = EnhancedFightGame(
             screen=self.screen,
@@ -645,6 +672,7 @@ class MainMenu:
             player_equipment=run_equipment,
             player_starting_hp=10,
             ai_starting_hp=10,
+            enemy_type=enemy_type,
             run_manager=self.run_manager,
             preview_player=self.preview_player,
             preview_deck=self.preview_deck
@@ -774,13 +802,18 @@ class MainMenu:
                         self.current_map.move_to_node(clicked_node)
                         
                         # Enter the selected node
-                        if clicked_node.node_type == NodeType.COMBAT:
-                            # Create preview deck and go to pre-fight screen
+                        if clicked_node.node_type in [NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS]:
+                            # Create preview deck and go to pre-fight screen for combat nodes
                             self.create_preview_deck()
                             self.state = "pre_fight"
-                        # TODO: Handle other node types (elite, exchange, mystery, boss)
+                        elif clicked_node.node_type == NodeType.EXCHANGE:
+                            # TODO: Implement exchange mechanics
+                            self.current_map.complete_current_node()
+                        elif clicked_node.node_type == NodeType.MYSTERY:
+                            # TODO: Implement mystery encounter mechanics  
+                            self.current_map.complete_current_node()
                         else:
-                            # For now, just mark as completed and stay on map
+                            # Fallback: mark as completed
                             self.current_map.complete_current_node()
                         return
                         
