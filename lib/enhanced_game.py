@@ -95,6 +95,7 @@ class EnhancedFightGame:
         
         # Game state tracking
         self.extra_turns = 0
+        self.extra_turn_player = None
         self.last_combo_damage_bonus = 0
         self.first_damage_taken = False
 
@@ -486,7 +487,7 @@ class EnhancedFightGame:
         # Handle extra turns
         if self.extra_turns > 0:
             self.extra_turns -= 1
-            self.current_player = self.player
+            self.current_player = self.extra_turn_player
 
     def take_damage(self, damage: int) -> int:
         """Take damage, applying equipment effects"""
@@ -523,7 +524,11 @@ class EnhancedFightGame:
             # Resort hand after skill card use
             self.resort_hand(self.player)
             if skill_card.one_time_use:
-                self.player_skill_cards.remove(skill_card)
+                # Find and remove by name instead of instance
+                for i, card in enumerate(self.player_skill_cards):
+                    if card.name == skill_card.name:
+                        self.player_skill_cards.pop(i)
+                        break
         return success
 
     def use_item(self, item: Item) -> bool:

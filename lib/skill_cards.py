@@ -58,6 +58,8 @@ class SkillCard:
             surface.blit(wrap_surface, (desc_rect.x + 10, desc_rect.y + 10 + j * line_height))
 
 
+# COMMON SKILL CARDS (in order from skill_card_data.py)
+
 class DiscardGrab(SkillCard):
     """Take 2 random cards from the discard pile into your hand"""
     
@@ -70,7 +72,6 @@ class DiscardGrab(SkillCard):
         )
     
     def can_use(self, game_state: Any) -> bool:
-        # Check if discard pile has at least 2 cards
         return hasattr(game_state, 'discard_pile') and len(game_state.discard_pile) >= 2
     
     def use(self, game_state: Any) -> bool:
@@ -80,35 +81,14 @@ class DiscardGrab(SkillCard):
         if not (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand')):
             return False
         
-        # Take 2 random cards from discard pile
         import random
         cards_to_take = min(2, len(game_state.discard_pile))
         taken_cards = random.sample(game_state.discard_pile, cards_to_take)
         
-        # Add to player hand
         game_state.player.hand.extend(taken_cards)
-        
-        # Remove from discard pile
         for card in taken_cards:
             game_state.discard_pile.remove(card)
         
-        return True
-
-
-class TimeWarp(SkillCard):
-    """Take an extra turn after this one"""
-    
-    def __init__(self):
-        super().__init__(
-            name="Time Warp",
-            rarity=Rarity.COMMON,
-            description="Take an extra turn after this one",
-            energy_cost=0
-        )
-    
-    def use(self, game_state: Any) -> bool:
-        # Grant extra turn
-        game_state.extra_turns += 1
         return True
 
 
@@ -133,131 +113,911 @@ class CardSteal(SkillCard):
         if not (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand')):
             return False
         
-        # Take 1 random card from opponent
         import random
         stolen_card = random.choice(game_state.ai.hand)
-        
-        # Add to player hand
         game_state.player.hand.append(stolen_card)
-        
-        # Remove from opponent hand
         game_state.ai.hand.remove(stolen_card)
         
         return True
 
 
 class DamageBoost(SkillCard):
-    """Next damage you deal is increased by 1"""
+    """Your next combo deals +1 damage if passed"""
     
     def __init__(self):
         super().__init__(
             name="Damage Boost",
             rarity=Rarity.COMMON,
-            description="Next damage you deal is increased by 1",
+            description="Your next combo deals +1 damage if passed",
             energy_cost=0
         )
     
     def use(self, game_state: Any) -> bool:
-        # Add damage bonus for next combo that beats opponent
         game_state.last_combo_damage_bonus += 1
         return True
 
 
-class HandRefresh(SkillCard):
-    """Draw 3 cards from the deck if available"""
+class Peek(SkillCard):
+    """Can see 3 random cards from opponent's hand"""
     
     def __init__(self):
         super().__init__(
-            name="Hand Refresh",
+            name="Peek",
             rarity=Rarity.COMMON,
-            description="Draw 3 cards from the deck if available",
+            description="Can see 3 random cards from opponent's hand",
             energy_cost=0
         )
     
     def can_use(self, game_state: Any) -> bool:
-        # Can use if we're in a proper game state (has discard pile)
-        return hasattr(game_state, 'discard_pile')
+        return hasattr(game_state, 'ai') and hasattr(game_state.ai, 'hand') and len(game_state.ai.hand) >= 3
     
     def use(self, game_state: Any) -> bool:
+        if not self.can_use(game_state):
+            return False
+        
+        import random
+        cards_to_peek = min(3, len(game_state.ai.hand))
+        peeked_cards = random.sample(game_state.ai.hand, cards_to_peek)
+        print(f"Peek reveals: {[str(card) for card in peeked_cards]}")
+        return True
+
+
+class Recovery(SkillCard):
+    """Heal 1 HP in this fight"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Recovery",
+            rarity=Rarity.COMMON,
+            description="Heal 1 HP in this fight",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        if hasattr(game_state, 'player') and hasattr(game_state.player, 'hp'):
+            max_hp = getattr(game_state.player, 'max_hp', 10)
+            game_state.player.hp = min(max_hp, game_state.player.hp + 1)
+            return True
+        return False
+
+
+class QuickSwap(SkillCard):
+    """Swap one card from your hand with one random card from opponent's hand"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Quick Swap",
+            rarity=Rarity.COMMON,
+            description="Swap one card from your hand with one random card from opponent's hand",
+            energy_cost=0
+        )
+    
+    def can_use(self, game_state: Any) -> bool:
+        return (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand') and 
+                len(game_state.player.hand) > 0 and hasattr(game_state, 'ai') and 
+                hasattr(game_state.ai, 'hand') and len(game_state.ai.hand) > 0)
+    
+    def use(self, game_state: Any) -> bool:
+        if not self.can_use(game_state):
+            return False
+        
+        import random
+        player_card = random.choice(game_state.player.hand)
+        ai_card = random.choice(game_state.ai.hand)
+        
+        game_state.player.hand.remove(player_card)
+        game_state.ai.hand.remove(ai_card)
+        game_state.player.hand.append(ai_card)
+        game_state.ai.hand.append(player_card)
+        
+        return True
+
+
+class Offload(SkillCard):
+    """Discard 1 card and draw 1 random card"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Offload",
+            rarity=Rarity.COMMON,
+            description="Discard 1 card and draw 1 random card",
+            energy_cost=0
+        )
+    
+    def can_use(self, game_state: Any) -> bool:
+        return (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand') and 
+                len(game_state.player.hand) > 0 and hasattr(game_state, 'discard_pile') and 
+                len(game_state.discard_pile) > 0)
+    
+    def use(self, game_state: Any) -> bool:
+        if not self.can_use(game_state):
+            return False
+        
+        import random
+        discarded_card = random.choice(game_state.player.hand)
+        game_state.player.hand.remove(discarded_card)
+        game_state.discard_pile.append(discarded_card)
+        
+        drawn_card = random.choice(game_state.discard_pile)
+        game_state.discard_pile.remove(drawn_card)
+        game_state.player.hand.append(drawn_card)
+        
+        return True
+
+
+class Upgrade(SkillCard):
+    """Upgrade 1 card in your hand to next rank (max 2)"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Upgrade",
+            rarity=Rarity.COMMON,
+            description="Upgrade 1 card in your hand to next rank (max 2)",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        if not (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand') and len(game_state.player.hand) > 0):
+            return False
+        
+        import random
+        card_to_upgrade = random.choice(game_state.player.hand)
+        # TODO: Implement rank upgrade logic
+        print(f"Upgraded {card_to_upgrade}")
+        return True
+
+
+class Downgrade(SkillCard):
+    """Downgrade 1 card in your hand to next rank (min 3)"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Downgrade",
+            rarity=Rarity.COMMON,
+            description="Downgrade 1 card in your hand to next rank (min 3)",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        if not (hasattr(game_state, 'ai') and hasattr(game_state.ai, 'hand') and len(game_state.ai.hand) > 0):
+            return False
+        
+        import random
+        card_to_downgrade = random.choice(game_state.ai.hand)
+        # TODO: Implement rank downgrade logic
+        print(f"Downgraded opponent's {card_to_downgrade}")
+        return True
+
+
+class Break(SkillCard):
+    """Change 1 random card from opponent's hand into another random card"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Break",
+            rarity=Rarity.COMMON,
+            description="Change 1 random card from opponent's hand into another random card",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        if not (hasattr(game_state, 'ai') and hasattr(game_state.ai, 'hand') and len(game_state.ai.hand) > 0):
+            return False
+        
+        import random
+        from lib.core_types import Card, Suit
+        
+        old_card = random.choice(game_state.ai.hand)
+        game_state.ai.hand.remove(old_card)
+        
+        suits = [Suit.SPADES, Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS]
+        ranks = ["3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A", "2"]
+        new_card = Card(random.choice(ranks), random.choice(suits))
+        game_state.ai.hand.append(new_card)
+        
+        print(f"Broke opponent's {old_card} into {new_card}")
+        return True
+
+
+class Drop(SkillCard):
+    """Discard 1 card from opponent's hand"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Drop",
+            rarity=Rarity.COMMON,
+            description="Discard 1 card from opponent's hand",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        if not (hasattr(game_state, 'ai') and hasattr(game_state.ai, 'hand') and len(game_state.ai.hand) > 0):
+            return False
+        
+        import random
+        dropped_card = random.choice(game_state.ai.hand)
+        game_state.ai.hand.remove(dropped_card)
+        
+        if hasattr(game_state, 'discard_pile'):
+            game_state.discard_pile.append(dropped_card)
+        
+        print(f"Dropped opponent's {dropped_card}")
+        return True
+
+
+class Double(SkillCard):
+    """Add an extra card to your selected card for this fight"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Double",
+            rarity=Rarity.COMMON,
+            description="Add an extra card to your selected card for this fight",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        if not hasattr(game_state, 'double_active'):
+            game_state.double_active = 0
+        game_state.double_active += 1
+        return True
+
+
+class SpadeMaster(SkillCard):
+    """Change 2 cards into spades for this fight"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Spade Master",
+            rarity=Rarity.COMMON,
+            description="Change 2 cards into spades for this fight",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        if not (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand') and len(game_state.player.hand) >= 2):
+            return False
+        
+        import random
+        from lib.core_types import Suit
+        
+        cards_to_change = random.sample(game_state.player.hand, min(2, len(game_state.player.hand)))
+        for card in cards_to_change:
+            card.suit = Suit.SPADES
+        
+        print(f"Changed {len(cards_to_change)} cards to spades")
+        return True
+
+
+class HeartChampion(SkillCard):
+    """Change 2 cards into hearts for this fight"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Heart Champion",
+            rarity=Rarity.COMMON,
+            description="Change 2 cards into hearts for this fight",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        if not (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand') and len(game_state.player.hand) >= 2):
+            return False
+        
+        import random
+        from lib.core_types import Suit
+        
+        cards_to_change = random.sample(game_state.player.hand, min(2, len(game_state.player.hand)))
+        for card in cards_to_change:
+            card.suit = Suit.HEARTS
+        
+        print(f"Changed {len(cards_to_change)} cards to hearts")
+        return True
+
+
+class ClubKnight(SkillCard):
+    """Change 2 cards into clubs for this fight"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Club Knight",
+            rarity=Rarity.COMMON,
+            description="Change 2 cards into clubs for this fight",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        if not (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand') and len(game_state.player.hand) >= 2):
+            return False
+        
+        import random
+        from lib.core_types import Suit
+        
+        cards_to_change = random.sample(game_state.player.hand, min(2, len(game_state.player.hand)))
+        for card in cards_to_change:
+            card.suit = Suit.CLUBS
+        
+        print(f"Changed {len(cards_to_change)} cards to clubs")
+        return True
+
+
+class DiamondKing(SkillCard):
+    """Change 2 cards into diamonds for this fight"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Diamond King",
+            rarity=Rarity.COMMON,
+            description="Change 2 cards into diamonds for this fight",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        if not (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand') and len(game_state.player.hand) >= 2):
+            return False
+        
+        import random
+        from lib.core_types import Suit
+        
+        cards_to_change = random.sample(game_state.player.hand, min(2, len(game_state.player.hand)))
+        for card in cards_to_change:
+            card.suit = Suit.DIAMONDS
+        
+        print(f"Changed {len(cards_to_change)} cards to diamonds")
+        return True
+
+
+class PairMaster(SkillCard):
+    """Play any single as if it were a pair"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Pair Master",
+            rarity=Rarity.COMMON,
+            description="Play any single as if it were a pair",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        if not hasattr(game_state, 'pair_master_active'):
+            game_state.pair_master_active = 0
+        game_state.pair_master_active += 1
+        return True
+
+
+# RARE SKILL CARDS
+
+class DiscardGrab2(SkillCard):
+    """Take 4 random cards from the discard pile into your hand"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Discard Grab 2",
+            rarity=Rarity.RARE,
+            description="Take 4 random cards from the discard pile into your hand",
+            energy_cost=0
+        )
+    
+    def can_use(self, game_state: Any) -> bool:
+        return hasattr(game_state, 'discard_pile') and len(game_state.discard_pile) >= 4
+    
+    def use(self, game_state: Any) -> bool:
+        if not self.can_use(game_state):
+            return False
+        
         if not (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand')):
             return False
         
-        # Draw up to 3 cards from discard pile (simulating deck)
         import random
-        cards_to_draw = min(3, len(game_state.discard_pile))
-        if cards_to_draw > 0:
-            drawn_cards = random.sample(game_state.discard_pile, cards_to_draw)
-            game_state.player.hand.extend(drawn_cards)
-            for card in drawn_cards:
-                game_state.discard_pile.remove(card)
+        cards_to_take = min(4, len(game_state.discard_pile))
+        taken_cards = random.sample(game_state.discard_pile, cards_to_take)
+        
+        game_state.player.hand.extend(taken_cards)
+        for card in taken_cards:
+            game_state.discard_pile.remove(card)
+        
         return True
 
 
-class ShieldBreaker(SkillCard):
-    """Next time opponent would take damage, they take 1 extra damage"""
+class CardSteal2(SkillCard):
+    """Take 2 random cards from opponent's hand"""
     
     def __init__(self):
         super().__init__(
-            name="Shield Breaker",
+            name="Card Steal 2",
             rarity=Rarity.RARE,
-            description="Next time opponent would take damage, they take 1 extra damage",
+            description="Take 2 random cards from opponent's hand",
             energy_cost=0
         )
     
-    def use(self, game_state: Any) -> bool:
-        # Add damage bonus for next successful attack
-        game_state.last_combo_damage_bonus += 1
-        return True
-
-
-class CardSort(SkillCard):
-    """Reorganize your hand optimally"""
-    
-    def __init__(self):
-        super().__init__(
-            name="Card Sort",
-            rarity=Rarity.COMMON,
-            description="Reorganize your hand optimally",
-            energy_cost=0
-        )
+    def can_use(self, game_state: Any) -> bool:
+        return hasattr(game_state, 'ai') and hasattr(game_state.ai, 'hand') and len(game_state.ai.hand) >= 2
     
     def use(self, game_state: Any) -> bool:
-        if not (hasattr(game_state, 'player') and hasattr(game_state.player, 'sort_hand')):
+        if not self.can_use(game_state):
             return False
         
-        # Resort the hand
-        game_state.player.sort_hand()
+        if not (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand')):
+            return False
+        
+        import random
+        stolen_cards = random.sample(game_state.ai.hand, min(2, len(game_state.ai.hand)))
+        
+        for card in stolen_cards:
+            game_state.player.hand.append(card)
+            game_state.ai.hand.remove(card)
+        
         return True
 
 
-class LifeSteal(SkillCard):
-    """Next damage you deal also heals you for 1 HP"""
+class DamageBoost2(SkillCard):
+    """Your next combo deals +2 damage if passed"""
     
     def __init__(self):
         super().__init__(
-            name="Life Steal",
+            name="Damage Boost 2",
             rarity=Rarity.RARE,
-            description="Next damage you deal also heals you for 1 HP",
+            description="Your next combo deals +2 damage if passed",
             energy_cost=0
         )
     
     def use(self, game_state: Any) -> bool:
-        # This would need special handling in combat system
-        game_state.last_combo_damage_bonus += 0  # No damage bonus
-        # TODO: Add life steal effect tracking
+        game_state.last_combo_damage_bonus += 2
+        return True
+
+
+class Peek2(SkillCard):
+    """Can see 6 random cards from opponent's hand"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Peek 2",
+            rarity=Rarity.RARE,
+            description="Can see 6 random cards from opponent's hand",
+            energy_cost=0
+        )
+    
+    def can_use(self, game_state: Any) -> bool:
+        return hasattr(game_state, 'ai') and hasattr(game_state.ai, 'hand') and len(game_state.ai.hand) > 0
+    
+    def use(self, game_state: Any) -> bool:
+        if not self.can_use(game_state):
+            return False
+        
+        import random
+        cards_to_peek = min(6, len(game_state.ai.hand))
+        peeked_cards = random.sample(game_state.ai.hand, cards_to_peek)
+        print(f"Peek 2 reveals: {[str(card) for card in peeked_cards]}")
+        return True
+
+
+class Recovery2(SkillCard):
+    """Heal 2 HP in this fight"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Recovery 2",
+            rarity=Rarity.RARE,
+            description="Heal 2 HP in this fight",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        if hasattr(game_state, 'player') and hasattr(game_state.player, 'hp'):
+            max_hp = getattr(game_state.player, 'max_hp', 10)
+            game_state.player.hp = min(max_hp, game_state.player.hp + 2)
+            return True
+        return False
+
+
+class QuickSwap2(SkillCard):
+    """Swap 2 cards from your hand with 2 random cards from opponent's hand"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Quick Swap 2",
+            rarity=Rarity.RARE,
+            description="Swap 2 cards from your hand with 2 random cards from opponent's hand",
+            energy_cost=0
+        )
+    
+    def can_use(self, game_state: Any) -> bool:
+        return (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand') and 
+                len(game_state.player.hand) >= 2 and hasattr(game_state, 'ai') and 
+                hasattr(game_state.ai, 'hand') and len(game_state.ai.hand) >= 2)
+    
+    def use(self, game_state: Any) -> bool:
+        if not self.can_use(game_state):
+            return False
+        
+        import random
+        player_cards = random.sample(game_state.player.hand, 2)
+        ai_cards = random.sample(game_state.ai.hand, 2)
+        
+        for card in player_cards:
+            game_state.player.hand.remove(card)
+        for card in ai_cards:
+            game_state.ai.hand.remove(card)
+        
+        game_state.player.hand.extend(ai_cards)
+        game_state.ai.hand.extend(player_cards)
+        
+        return True
+
+
+class Offload2(SkillCard):
+    """Discard 2 cards and draw 2 random cards"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Offload 2",
+            rarity=Rarity.RARE,
+            description="Discard 2 cards and draw 2 random cards",
+            energy_cost=0
+        )
+    
+    def can_use(self, game_state: Any) -> bool:
+        return (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand') and 
+                len(game_state.player.hand) >= 2 and hasattr(game_state, 'discard_pile') and 
+                len(game_state.discard_pile) >= 2)
+    
+    def use(self, game_state: Any) -> bool:
+        if not self.can_use(game_state):
+            return False
+        
+        import random
+        discarded_cards = random.sample(game_state.player.hand, 2)
+        for card in discarded_cards:
+            game_state.player.hand.remove(card)
+            game_state.discard_pile.append(card)
+        
+        drawn_cards = random.sample(game_state.discard_pile, 2)
+        for card in drawn_cards:
+            game_state.discard_pile.remove(card)
+            game_state.player.hand.append(card)
+        
+        return True
+
+
+class TripleMaster(SkillCard):
+    """Play any single as if it were a triple"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Triple Master",
+            rarity=Rarity.RARE,
+            description="Play any single as if it were a triple",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        if not hasattr(game_state, 'triple_master_active'):
+            game_state.triple_master_active = 0
+        game_state.triple_master_active += 1
+        return True
+
+
+class Mirror(SkillCard):
+    """Take one random card from opponent's last played combo into your hand"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Mirror",
+            rarity=Rarity.RARE,
+            description="Take one random card from opponent's last played combo into your hand",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        # TODO: Implement last combo tracking
+        print("Mirror activated - would copy from last combo")
+        return True
+
+
+class WildCard(SkillCard):
+    """Change a card to wild card (can be used as any rank) for this fight"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Wild Card",
+            rarity=Rarity.RARE,
+            description="Change a card to wild card (can be used as any rank) for this fight",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        if not (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand') and len(game_state.player.hand) > 0):
+            return False
+        
+        import random
+        card_to_wild = random.choice(game_state.player.hand)
+        # TODO: Implement wild card marking
+        print(f"Made {card_to_wild} into a wild card")
+        return True
+
+
+# EPIC SKILL CARDS
+
+class DiscardGrab3(SkillCard):
+    """Choose 4 cards from the discard pile to add to your hand"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Discard Grab 3",
+            rarity=Rarity.EPIC,
+            description="Choose 4 cards from the discard pile to add to your hand",
+            energy_cost=0
+        )
+    
+    def can_use(self, game_state: Any) -> bool:
+        return hasattr(game_state, 'discard_pile') and len(game_state.discard_pile) >= 4
+    
+    def use(self, game_state: Any) -> bool:
+        if not self.can_use(game_state):
+            return False
+        
+        if not (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand')):
+            return False
+        
+        import random
+        cards_to_take = min(4, len(game_state.discard_pile))
+        taken_cards = random.sample(game_state.discard_pile, cards_to_take)
+        
+        game_state.player.hand.extend(taken_cards)
+        for card in taken_cards:
+            game_state.discard_pile.remove(card)
+        
+        print(f"Chose cards: {[str(card) for card in taken_cards]}")
+        return True
+
+
+class CardSteal3(SkillCard):
+    """Take the top 2 cards from opponent's hand"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Card Steal 3",
+            rarity=Rarity.EPIC,
+            description="Take the top 2 cards from opponent's hand",
+            energy_cost=0
+        )
+    
+    def can_use(self, game_state: Any) -> bool:
+        return hasattr(game_state, 'ai') and hasattr(game_state.ai, 'hand') and len(game_state.ai.hand) >= 2
+    
+    def use(self, game_state: Any) -> bool:
+        if not self.can_use(game_state):
+            return False
+        
+        if not (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand')):
+            return False
+        
+        stolen_cards = game_state.ai.hand[:2]
+        
+        for card in stolen_cards:
+            game_state.player.hand.append(card)
+            game_state.ai.hand.remove(card)
+        
+        return True
+
+
+class DamageBoost3(SkillCard):
+    """Your next combo deals +3 damage if passed"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Damage Boost 3",
+            rarity=Rarity.EPIC,
+            description="Your next combo deals +3 damage if passed",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        game_state.last_combo_damage_bonus += 3
+        return True
+
+
+class Peek3(SkillCard):
+    """Can see all cards from opponent's hand"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Peek 3",
+            rarity=Rarity.EPIC,
+            description="Can see all cards from opponent's hand",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        if hasattr(game_state, 'ai') and hasattr(game_state.ai, 'hand'):
+            print(f"Peek 3 reveals all cards: {[str(card) for card in game_state.ai.hand]}")
+            return True
+        return False
+
+
+class Recovery3(SkillCard):
+    """Heal 1 LP in this run"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Recovery 3",
+            rarity=Rarity.EPIC,
+            description="Heal 1 LP in this run",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        # TODO: This would need to affect run manager life points
+        print("Recovery 3 healed 1 Life Point for the run")
+        return True
+
+
+class QuickSwap3(SkillCard):
+    """Swap your hand with your opponent's hand"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Quick Swap 3",
+            rarity=Rarity.EPIC,
+            description="Swap your hand with your opponent's hand",
+            energy_cost=0
+        )
+    
+    def can_use(self, game_state: Any) -> bool:
+        return (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand') and 
+                hasattr(game_state, 'ai') and hasattr(game_state.ai, 'hand'))
+    
+    def use(self, game_state: Any) -> bool:
+        if not self.can_use(game_state):
+            return False
+        
+        player_hand = game_state.player.hand[:]
+        ai_hand = game_state.ai.hand[:]
+        
+        game_state.player.hand.clear()
+        game_state.ai.hand.clear()
+        
+        game_state.player.hand.extend(ai_hand)
+        game_state.ai.hand.extend(player_hand)
+        
+        return True
+
+
+class Offload3(SkillCard):
+    """Discard entire hand and draw same number of random cards"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Offload 3",
+            rarity=Rarity.EPIC,
+            description="Discard entire hand and draw same number of random cards",
+            energy_cost=0
+        )
+    
+    def can_use(self, game_state: Any) -> bool:
+        return (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand') and 
+                len(game_state.player.hand) > 0 and hasattr(game_state, 'discard_pile') and 
+                len(game_state.discard_pile) >= len(game_state.player.hand))
+    
+    def use(self, game_state: Any) -> bool:
+        if not self.can_use(game_state):
+            return False
+        
+        import random
+        hand_size = len(game_state.player.hand)
+        
+        game_state.discard_pile.extend(game_state.player.hand)
+        game_state.player.hand.clear()
+        
+        drawn_cards = random.sample(game_state.discard_pile, hand_size)
+        for card in drawn_cards:
+            game_state.discard_pile.remove(card)
+            game_state.player.hand.append(card)
+        
+        return True
+
+
+class BombMaster(SkillCard):
+    """Play any single as if it were a bomb"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Bomb Master",
+            rarity=Rarity.EPIC,
+            description="Play any single as if it were a bomb",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        if not hasattr(game_state, 'bomb_master_active'):
+            game_state.bomb_master_active = 0
+        game_state.bomb_master_active += 1
+        return True
+
+
+class Mirror2(SkillCard):
+    """Take all cards from opponent's last played combo into your hand"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Mirror 2",
+            rarity=Rarity.EPIC,
+            description="Take all cards from opponent's last played combo into your hand",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        # TODO: Implement last combo tracking
+        print("Mirror 2 activated - would copy all cards from last combo")
+        return True
+
+
+class WildCard2(SkillCard):
+    """Change 2 cards to wild cards (can be used as any rank) for this fight"""
+    
+    def __init__(self):
+        super().__init__(
+            name="Wild Card 2",
+            rarity=Rarity.EPIC,
+            description="Change 2 cards to wild cards (can be used as any rank) for this fight",
+            energy_cost=0
+        )
+    
+    def use(self, game_state: Any) -> bool:
+        if not (hasattr(game_state, 'player') and hasattr(game_state.player, 'hand') and len(game_state.player.hand) >= 2):
+            return False
+        
+        import random
+        cards_to_wild = random.sample(game_state.player.hand, 2)
+        # TODO: Implement wild card marking
+        print(f"Made {len(cards_to_wild)} cards into wild cards")
         return True
 
 
 # Registry of all skill cards
 SKILL_CARDS = {
+    # Common cards (in exact order from skill_card_data.py)
     "Discard Grab": DiscardGrab,
-    "Time Warp": TimeWarp,
     "Card Steal": CardSteal,
     "Damage Boost": DamageBoost,
-    "Hand Refresh": HandRefresh,
-    "Shield Breaker": ShieldBreaker,
-    "Card Sort": CardSort,
-    "Life Steal": LifeSteal,
+    "Peek": Peek,
+    "Recovery": Recovery,
+    "Quick Swap": QuickSwap,
+    "Offload": Offload,
+    "Upgrade": Upgrade,
+    "Downgrade": Downgrade,
+    "Break": Break,
+    "Drop": Drop,
+    "Double": Double,
+    "Spade Master": SpadeMaster,
+    "Heart Champion": HeartChampion,
+    "Club Knight": ClubKnight,
+    "Diamond King": DiamondKing,
+    "Pair Master": PairMaster,
+    
+    # Rare cards (in exact order from skill_card_data.py)
+    "Discard Grab 2": DiscardGrab2,
+    "Card Steal 2": CardSteal2,
+    "Damage Boost 2": DamageBoost2,
+    "Peek 2": Peek2,
+    "Recovery 2": Recovery2,
+    "Quick Swap 2": QuickSwap2,
+    "Offload 2": Offload2,
+    "Triple Master": TripleMaster,
+    "Mirror": Mirror,
+    "Wild Card": WildCard,
+    
+    # Epic cards (in exact order from skill_card_data.py)
+    "Discard Grab 3": DiscardGrab3,
+    "Card Steal 3": CardSteal3,
+    "Damage Boost 3": DamageBoost3,
+    "Peek 3": Peek3,
+    "Recovery 3": Recovery3,
+    "Quick Swap 3": QuickSwap3,
+    "Offload 3": Offload3,
+    "Bomb Master": BombMaster,
+    "Mirror 2": Mirror2,
+    "Wild Card 2": WildCard2,
 }
 
 
@@ -279,30 +1039,34 @@ def get_random_skill_cards(count: int = 3, exclude: List[str] = None) -> List[Sk
     exclude = exclude or []
     available_cards = [name for name in SKILL_CARDS.keys() if name not in exclude]
     
-    if len(available_cards) < count:
+    if count > len(available_cards):
         count = len(available_cards)
     
     selected_names = random.sample(available_cards, count)
     return [get_skill_card(name) for name in selected_names]
 
 
-def get_skill_card_image_path(card_name: str) -> str:
-    """Get the file path for a skill card image"""
-    import os
-    filename = card_name.lower().replace(" ", "_").replace("'", "") + ".png"
-    return os.path.join("images/skill_cards", filename)
-
-
 def load_skill_card_image(card_name: str):
-    """Load a skill card image, return None if not found"""
+    """Load skill card image from file"""
+    import pygame
+    import os
     try:
-        import pygame
-        import os
-        image_path = get_skill_card_image_path(card_name)
+        image_path = f"assets/skill_cards/{card_name.lower().replace(' ', '_')}.png"
         if os.path.exists(image_path):
             return pygame.image.load(image_path)
         else:
-            # Return a placeholder if image doesn't exist
-            return None
+            # Return placeholder image
+            placeholder = pygame.Surface((100, 140))
+            placeholder.fill((128, 128, 128))
+            return placeholder
     except:
-        return None 
+        # Return placeholder on error
+        placeholder = pygame.Surface((100, 140))
+        placeholder.fill((128, 128, 128))
+        return placeholder
+
+
+def get_skill_card_image_path(card_name: str) -> str:
+    """Get the file path for a skill card image"""
+    filename = card_name.lower().replace(' ', '_').replace("'", '')
+    return f"images/skill_cards/{filename}.png"
